@@ -121,6 +121,10 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
         if event.type != 'TIMER':
             return {'PASS_THROUGH'}
 
+        if context.object is None or context.object.type != 'ARMATURE':
+            self.cancel(context)
+            return {'FINISHED'}
+
         active_quaternion_procedural = self.active_quaternion_procedural
 
         if not active_quaternion_procedural.preview:
