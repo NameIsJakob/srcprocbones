@@ -1,5 +1,6 @@
 
 import bpy
+from sys import float_info
 from math import degrees, radians, acos
 from mathutils import Euler, Matrix, Vector, Quaternion
 
@@ -157,6 +158,11 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
         control_bone_matrix = control_bone.parent.bone.matrix_local.transposed() @ control_bone.bone.matrix_local @ control_bone.matrix_basis
 
         for index, trigger in enumerate(active_quaternion_procedural.triggers):
+            if trigger.tolerance <= float_info.epsilon:
+                self.report({'ERROR'}, f"\"{trigger.name}\" Tolerance Is Too Small")
+                self.cancel(context)
+                return {'FINISHED'}
+
             dot = abs(Euler(trigger.trigger_angle).to_quaternion().dot(control_bone_matrix.to_quaternion()))
             dot = min(max(dot, -1), 1)
             weights[index] = 1 - (2 * acos(dot) * (1 / trigger.tolerance))
