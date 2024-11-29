@@ -469,18 +469,18 @@ class SetPositionQuaternionProceduralTriggerOperator(bpy.types.Operator):
         control_bone = context.object.pose.bones[active_quaternion_procedural.control_bone]
         target_bone = context.object.pose.bones[active_quaternion_procedural.target_bone]
 
-        if not active_quaternion_procedural.override_position:
-            active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = target_bone.matrix_basis.to_translation()
+        base_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local @ target_bone.matrix_basis).to_translation()
 
+        if not active_quaternion_procedural.override_position:
+            bind_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local).to_translation()
+            base_position -= bind_position
+            active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = base_position
             return {'FINISHED'}
 
-        base_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local @ target_bone.matrix_basis).to_translation()
         base_position -= Vector(active_quaternion_procedural.position_override)
         base_position -= (control_bone.parent.bone.matrix_local.inverted_safe() @ control_bone.bone.matrix_local).to_translation() * \
             (active_quaternion_procedural.distance / 100)
-
         active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = base_position
-
         return {'FINISHED'}
 
 
