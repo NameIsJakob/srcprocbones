@@ -9,7 +9,7 @@ bl_info = {
     "category": "Animation",
     "description": "A panel that helps create procedural bones for source engine models.",
     "author": "Jakobg1215",
-    "version": (2, 0, 1),
+    "version": (2, 0, 2),
     "blender": (2, 80, 0),
     "location": "View3D > Src Proc Bones",
     "tracker_url": "https://github.com/Jakobg1215/srcprocbones/issues",
@@ -19,28 +19,32 @@ bl_info = {
 
 
 class QuaternionProceduralTriggerProperty(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(default="New Trigger")
-    tolerance: bpy.props.FloatProperty(default=radians(90), precision=6, soft_min=0, unit='ROTATION')
-    trigger_angle: bpy.props.FloatVectorProperty(precision=6, unit='ROTATION')
-    target_angle: bpy.props.FloatVectorProperty(precision=6, unit='ROTATION')
-    target_position: bpy.props.FloatVectorProperty(precision=6)
+    name: bpy.props.StringProperty(default="New Trigger", name="Name", description="The name of the trigger")
+    tolerance: bpy.props.FloatProperty(default=radians(90), precision=6, soft_min=0, unit='ROTATION',
+                                       description="The angle cone the control bone angle to the angle trigger to activate the trigger")
+    trigger_angle: bpy.props.FloatVectorProperty(precision=6, unit='ROTATION', name="Trigger Angle",
+                                                 description="The angle the control bone should be at to activate the trigger")
+    target_angle: bpy.props.FloatVectorProperty(precision=6, unit='ROTATION', name="Target Angle",
+                                                description="The angle the target bone will be set to when the trigger is active")
+    target_position: bpy.props.FloatVectorProperty(precision=6, name="Target Position", description="The added offset position when the trigger is active")
 
 
 class QuaternionProceduralProperty(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(default="New Quaternion Procedural")
-    target_bone: bpy.props.StringProperty()
-    control_bone: bpy.props.StringProperty()
-    distance: bpy.props.FloatProperty(soft_min=0, soft_max=100)
-    override_position: bpy.props.BoolProperty(default=False)
-    position_override: bpy.props.FloatVectorProperty(precision=6)
+    name: bpy.props.StringProperty(default="New Quaternion Procedural", name="Name", description="The name of the quaternion procedural")
+    target_bone: bpy.props.StringProperty(name="Target Bone", description="The bone that will be procedurally animated")
+    control_bone: bpy.props.StringProperty(name="Control Bone", description="The bone that will drive the target bone")
+    override_position: bpy.props.BoolProperty(default=False, description="Allows to override the position of the target bone")
+    position_override: bpy.props.FloatVectorProperty(precision=6, name="Position", description="The offset position of the target bone's parent")
+    distance: bpy.props.FloatProperty(soft_min=0, soft_max=100,
+                                      description="The percentage of the control bone's position offset from its parent added to the target bone's position")
     triggers: bpy.props.CollectionProperty(type=QuaternionProceduralTriggerProperty)
-    active_trigger: bpy.props.IntProperty()
+    active_trigger: bpy.props.IntProperty(name="Active Trigger")
     preview: bpy.props.BoolProperty()
 
 
 class SourceProceduralBoneDataProperty(bpy.types.PropertyGroup):
     quaternion_procedurals: bpy.props.CollectionProperty(type=QuaternionProceduralProperty)
-    active_quaternion_procedural: bpy.props.IntProperty()
+    active_quaternion_procedural: bpy.props.IntProperty(name="Active Quaternion Procedural")
 
 # endregion
 
@@ -538,14 +542,14 @@ class QuaternionProceduralList(bpy.types.UIList):
     bl_idname = "OBJECT_UL_QuaternionProcedural"
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-        layout.label(text=item.name)
+        layout.prop(item, "name", text="", emboss=False, icon_value=icon)
 
 
 class QuaternionProceduralTriggerList(bpy.types.UIList):
     bl_idname = "OBJECT_UL_QuaternionProceduralTrigger"
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-        layout.label(text=item.name)
+        layout.prop(item, "name", text="", emboss=False, icon_value=icon)
 
 
 class ProceduralBonePanel(bpy.types.Panel):
