@@ -20,6 +20,7 @@ bl_info = {
 
 class QuaternionProceduralTriggerProperty(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="New Trigger", name="Name", description="The name of the trigger")
+    weight: bpy.props.FloatProperty()
     tolerance: bpy.props.FloatProperty(default=radians(90), precision=6, soft_min=0, unit='ROTATION',
                                        description="The angle cone the control bone angle to the angle trigger to activate the trigger")
     trigger_angle: bpy.props.FloatVectorProperty(precision=6, unit='ROTATION', name="Trigger Angle",
@@ -192,7 +193,12 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
             scale += weights[index]
 
         if scale <= 0.001:
+            for trigger in active_quaternion_procedural.triggers:
+                trigger.weight = 0
+
             active_trigger = active_quaternion_procedural.triggers[0]
+            active_trigger.weight = 1
+
             target_rotation = Euler(active_trigger.target_angle).to_matrix()
             target_bone_transposed = matrix_transpose(target_bone.bone.matrix_local)
 
@@ -214,33 +220,15 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
         quat = Quaternion((0, 0, 0, 0))
         pos = Vector((0, 0, 0))
 
-        def quaternion_align(p, q, qt):
-            a = 0
-            b = 0
-
-            for i in range(4):
-                a += (p[i]-q[i])*(p[i]-q[i])
-                b += (p[i]+q[i])*(p[i]+q[i])
-
-            if a > b:
-                for i in range(4):
-                    print(i)
-                    qt[i] = -q[i]
-                return
-
-            if not qt is q:
-                for i in range(4):
-                    qt[i] = q[i]
-
         for index, trigger in enumerate(active_quaternion_procedural.triggers):
             if weights[index] == 0:
+                trigger.weight = 0
                 continue
 
             s = weights[index] * scale
+            trigger.weight = s
             target_quaternion = Euler(trigger.target_angle).to_quaternion()
             target_position = Vector(trigger.target_position)
-
-            quaternion_align(target_quaternion, quat, quat)
 
             quat.x += s * target_quaternion.x
             quat.y += s * target_quaternion.y
@@ -251,7 +239,7 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
             pos.y += s * target_position.y
             pos.z += s * target_position.z
 
-        target_rotation = quat.to_matrix()
+        target_rotation = quat.normalized().to_matrix()
         target_bone_transposed = matrix_transpose(target_bone.bone.matrix_local)
 
         if not active_quaternion_procedural.override_position:
@@ -556,6 +544,11 @@ class QuaternionProceduralTriggerList(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         layout.prop(item, "name", text="", emboss=False, icon_value=icon)
 
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_quaternion_procedural = source_procedural_bone_data.quaternion_procedurals[source_procedural_bone_data.active_quaternion_procedural]
+        if active_quaternion_procedural.preview:
+            layout.label(text=f"Weight: {item.weight * 100:.2f}%")
+
 
 class ProceduralBonePanel(bpy.types.Panel):
     bl_category = "Src Proc Bones"
@@ -613,14 +606,6 @@ class ProceduralBonePanel(bpy.types.Panel):
         if active_quaternion_procedural.override_position:
             row.prop(active_quaternion_procedural, "position_override", text="")
             col.prop(active_quaternion_procedural, "distance", text="Distance")
-
-        # rotateaxis
-
-        # box.label(text="rotateaxis")
-
-        # jointorient
-
-        # box.label(text="jointorient")
 
         box.operator(PreviewQuaternionProceduralOperator.bl_idname, text="Preview Procedural", depress=active_quaternion_procedural.preview)
 
