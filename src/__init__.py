@@ -48,6 +48,19 @@ class SourceProceduralBoneDataProperty(bpy.types.PropertyGroup):
 
 # endregion
 
+
+def matrix_transpose(matrix):
+    translation = Vector((matrix[0][3], matrix[1][3], matrix[2][3]))
+    row_x = Vector((matrix[0][0], matrix[1][0], matrix[2][0]))
+    row_y = Vector((matrix[0][1], matrix[1][1], matrix[2][1]))
+    row_z = Vector((matrix[0][2], matrix[1][2], matrix[2][2]))
+
+    return Matrix(([matrix[0][0], matrix[1][0], matrix[2][0], -translation.dot(row_x)],
+                   [matrix[0][1], matrix[1][1], matrix[2][1], -translation.dot(row_y)],
+                   [matrix[0][2], matrix[1][2], matrix[2][2], -translation.dot(row_z)],
+                   [matrix[0][3], matrix[1][3], matrix[2][3], matrix[3][3]]))
+
+
 # region Quaternion Procedural Operators
 
 
@@ -163,39 +176,37 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
         weights = [i for i in range(32)]
         scale = 0
 
-        control_bone_matrix = control_bone.parent.bone.matrix_local.transposed() @ control_bone.bone.matrix_local @ control_bone.matrix_basis
-
+        transpose_parent = matrix_transpose(control_bone.parent.bone.matrix_local)
+        parent_space = transpose_parent @ control_bone.bone.matrix_local
+        current_rotation = parent_space @ control_bone.matrix_basis
         for index, trigger in enumerate(active_quaternion_procedural.triggers):
             if trigger.tolerance <= float_info.epsilon:
                 self.report({'ERROR'}, f"\"{trigger.name}\" Tolerance Is Too Small")
                 self.cancel(context)
                 return {'FINISHED'}
 
-            dot = abs(Euler(trigger.trigger_angle).to_quaternion().dot(control_bone_matrix.to_quaternion()))
+            dot = abs(Euler(trigger.trigger_angle).to_quaternion().dot(current_rotation.to_quaternion()))
             dot = min(max(dot, -1), 1)
             weights[index] = 1 - (2 * acos(dot) * (1 / trigger.tolerance))
             weights[index] = max(0, weights[index])
             scale += weights[index]
 
         if scale <= 0.001:
-            base_position = Vector()
+            active_trigger = active_quaternion_procedural.triggers[0]
+            target_rotation = Euler(active_trigger.target_angle).to_matrix()
+            target_bone_transposed = matrix_transpose(target_bone.bone.matrix_local)
 
-            if active_quaternion_procedural.override_position:
-                base_position = (target_bone.bone.matrix_local.inverted_safe() @ target_bone.parent.bone.matrix_local).to_translation() + \
-                    Vector(active_quaternion_procedural.position_override)
+            if not active_quaternion_procedural.override_position:
+                base_position = (matrix_transpose(target_bone.parent.bone.matrix_local) @ target_bone.bone.matrix_local).to_translation()
+                target_translation = Matrix.Translation(base_position + Vector(active_trigger.target_position))
+                target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
+                return {'PASS_THROUGH'}
 
-                base_position += (control_bone.parent.bone.matrix_local.inverted_safe() @ control_bone.bone.matrix_local).to_translation() * \
-                    (active_quaternion_procedural.distance / 100)
-
-            base_position += Vector(active_quaternion_procedural.triggers[0].target_position)
-
-            target_bone_location_matrix = Matrix.Translation(base_position)
-            target_bone_rotation_matrix = target_bone.bone.matrix_local.to_3x3().transposed() @ \
-                target_bone.parent.bone.matrix_local.to_3x3() @ \
-                Euler(active_quaternion_procedural.triggers[0].target_angle).to_matrix()
-
-            target_bone.matrix_basis = target_bone_location_matrix @ target_bone_rotation_matrix.to_4x4()
-
+            override_position = Vector(active_quaternion_procedural.position_override)
+            distance = active_quaternion_procedural.distance / 100
+            control_bone_position = (matrix_transpose(control_bone.parent.bone.matrix_local) @ control_bone.bone.matrix_local).to_translation() * distance
+            target_translation = Matrix.Translation(override_position + control_bone_position + Vector(active_trigger.target_position))
+            target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
             return {'PASS_THROUGH'}
 
         scale = 1.0 / scale
@@ -240,23 +251,20 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
             pos.y += s * target_position.y
             pos.z += s * target_position.z
 
-        base_position = Vector()
+        target_rotation = quat.to_matrix()
+        target_bone_transposed = matrix_transpose(target_bone.bone.matrix_local)
 
-        if active_quaternion_procedural.override_position:
-            base_position = (target_bone.bone.matrix_local.inverted_safe() @ target_bone.parent.bone.matrix_local).to_translation() + \
-                Vector(active_quaternion_procedural.position_override)
-            base_position += (control_bone.parent.bone.matrix_local.inverted_safe() @ control_bone.bone.matrix_local).to_translation() * \
-                (active_quaternion_procedural.distance / 100)
+        if not active_quaternion_procedural.override_position:
+            base_position = (matrix_transpose(target_bone.parent.bone.matrix_local) @ target_bone.bone.matrix_local).to_translation()
+            target_translation = Matrix.Translation(base_position + pos)
+            target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
+            return {'PASS_THROUGH'}
 
-        base_position += pos
-
-        target_bone_location_matrix = Matrix.Translation(base_position)
-        target_bone_rotation_matrix = target_bone.bone.matrix_local.to_3x3().transposed() @ \
-            target_bone.parent.bone.matrix_local.to_3x3() @ \
-            quat.to_euler().to_matrix()
-
-        target_bone.matrix_basis = target_bone_location_matrix @ target_bone_rotation_matrix.to_4x4()
-
+        override_position = Vector(active_quaternion_procedural.position_override)
+        distance = active_quaternion_procedural.distance / 100
+        control_bone_position = (matrix_transpose(control_bone.parent.bone.matrix_local) @ control_bone.bone.matrix_local).to_translation() * distance
+        target_translation = Matrix.Translation(override_position + control_bone_position + pos)
+        target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
         return {'PASS_THROUGH'}
 
     def cancel(self, context):
@@ -287,7 +295,7 @@ class CopyQuaternionProceduralOperator(bpy.types.Operator):
         target_bone = context.object.pose.bones[active_quaternion_procedural.target_bone]
         control_bone = context.object.pose.bones[active_quaternion_procedural.control_bone]
 
-        current_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local).to_translation()
+        current_position = (matrix_transpose(target_bone.parent.bone.matrix_local) @ target_bone.bone.matrix_local).to_translation()
 
         if active_quaternion_procedural.override_position:
             current_position = Vector(active_quaternion_procedural.position_override)
@@ -432,7 +440,9 @@ class SetTriggerQuaternionProceduralTriggerOperator(bpy.types.Operator):
         active_quaternion_procedural = source_procedural_bone_data.quaternion_procedurals[source_procedural_bone_data.active_quaternion_procedural]
         control_bone = context.object.pose.bones[active_quaternion_procedural.control_bone]
 
-        current_rotation = control_bone.parent.bone.matrix_local.transposed() @ control_bone.bone.matrix_local @ control_bone.matrix_basis
+        transpose_parent = matrix_transpose(control_bone.parent.bone.matrix_local)
+        parent_space = transpose_parent @ control_bone.bone.matrix_local
+        current_rotation = parent_space @ control_bone.matrix_basis
         active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].trigger_angle = current_rotation.to_euler()
 
         return {'FINISHED'}
@@ -452,7 +462,9 @@ class SetAngleQuaternionProceduralTriggerOperator(bpy.types.Operator):
         active_quaternion_procedural = source_procedural_bone_data.quaternion_procedurals[source_procedural_bone_data.active_quaternion_procedural]
         target_bone = context.object.pose.bones[active_quaternion_procedural.target_bone]
 
-        current_rotation = target_bone.parent.bone.matrix_local.transposed() @ target_bone.bone.matrix_local @ target_bone.matrix_basis
+        transpose_parent = matrix_transpose(target_bone.parent.bone.matrix_local)
+        parent_space = transpose_parent @ target_bone.bone.matrix_local
+        current_rotation = parent_space @ target_bone.matrix_basis
         active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_angle = current_rotation.to_euler()
 
         return {'FINISHED'}
@@ -473,18 +485,20 @@ class SetPositionQuaternionProceduralTriggerOperator(bpy.types.Operator):
         control_bone = context.object.pose.bones[active_quaternion_procedural.control_bone]
         target_bone = context.object.pose.bones[active_quaternion_procedural.target_bone]
 
-        base_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local @ target_bone.matrix_basis).to_translation()
+        base_position = (matrix_transpose(target_bone.parent.bone.matrix_local) @ target_bone.bone.matrix_local).to_translation()
+        current_position = ((matrix_transpose(target_bone.parent.bone.matrix_local) @
+                            target_bone.bone.matrix_local) @ target_bone.matrix_basis).to_translation()
 
         if not active_quaternion_procedural.override_position:
-            bind_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local).to_translation()
-            base_position -= bind_position
-            active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = base_position
+            active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = current_position - base_position
             return {'FINISHED'}
 
-        base_position -= Vector(active_quaternion_procedural.position_override)
-        base_position -= (control_bone.parent.bone.matrix_local.inverted_safe() @ control_bone.bone.matrix_local).to_translation() * \
-            (active_quaternion_procedural.distance / 100)
-        active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = base_position
+        override_position = Vector(active_quaternion_procedural.position_override)
+        distance = active_quaternion_procedural.distance / 100
+        control_bone_position = (matrix_transpose(control_bone.parent.bone.matrix_local) @ control_bone.bone.matrix_local).to_translation() * distance
+
+        active_quaternion_procedural.triggers[active_quaternion_procedural.active_trigger].target_position = current_position - \
+            override_position - control_bone_position
         return {'FINISHED'}
 
 
@@ -504,33 +518,24 @@ class PreviewQuaternionProceduralTriggerOperator(bpy.types.Operator):
         control_bone = context.object.pose.bones[active_quaternion_procedural.control_bone]
         target_bone = context.object.pose.bones[active_quaternion_procedural.target_bone]
 
-        control_bone_position = control_bone.matrix_basis.to_translation()
+        trigger_rotation = Euler(active_trigger.trigger_angle).to_matrix()
+        control_bone_transposed = matrix_transpose(control_bone.bone.matrix_local).to_3x3()
+        control_bone.matrix_basis = (control_bone_transposed @ control_bone.parent.bone.matrix_local.to_3x3() @ trigger_rotation).to_4x4()
 
-        control_bone_location_matrix = Matrix.Translation(control_bone_position)
-        control_bone_rotation_matrix = control_bone.bone.matrix_local.to_3x3().transposed() @ \
-            control_bone.parent.bone.matrix_local.to_3x3() @ \
-            Euler(active_trigger.trigger_angle).to_matrix()
+        target_rotation = Euler(active_trigger.target_angle).to_matrix()
+        target_bone_transposed = matrix_transpose(target_bone.bone.matrix_local)
 
-        control_bone.matrix_basis = control_bone_location_matrix @ control_bone_rotation_matrix.to_4x4()
+        if not active_quaternion_procedural.override_position:
+            base_position = (matrix_transpose(target_bone.parent.bone.matrix_local) @ target_bone.bone.matrix_local).to_translation()
+            target_translation = Matrix.Translation(base_position + Vector(active_trigger.target_position))
+            target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
+            return {'FINISHED'}
 
-        base_position = Vector()
-
-        if active_quaternion_procedural.override_position:
-            base_position = (target_bone.bone.matrix_local.inverted_safe() @ target_bone.parent.bone.matrix_local).to_translation() + \
-                Vector(active_quaternion_procedural.position_override)
-
-            base_position += (control_bone.parent.bone.matrix_local.inverted_safe() @ control_bone.bone.matrix_local).to_translation() * \
-                (active_quaternion_procedural.distance / 100)
-
-        base_position += Vector(active_trigger.target_position)
-
-        target_bone_location_matrix = Matrix.Translation(base_position)
-        target_bone_rotation_matrix = target_bone.bone.matrix_local.to_3x3().transposed() @ \
-            target_bone.parent.bone.matrix_local.to_3x3() @ \
-            Euler(active_trigger.target_angle).to_matrix()
-
-        target_bone.matrix_basis = target_bone_location_matrix @ target_bone_rotation_matrix.to_4x4()
-
+        override_position = Vector(active_quaternion_procedural.position_override)
+        distance = active_quaternion_procedural.distance / 100
+        control_bone_position = (matrix_transpose(control_bone.parent.bone.matrix_local) @ control_bone.bone.matrix_local).to_translation() * distance
+        target_translation = Matrix.Translation(override_position + control_bone_position + Vector(active_trigger.target_position))
+        target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
         return {'FINISHED'}
 
 # endregion
