@@ -550,10 +550,10 @@ class QuaternionProceduralTriggerList(bpy.types.UIList):
             layout.label(text=f"Weight: {item.weight * 100:.2f}%")
 
 
-class ProceduralBonePanel(bpy.types.Panel):
+class QuaternionProceduralPanel(bpy.types.Panel):
     bl_category = "Src Proc Bones"
     bl_label = "Quaternion Procedurals"
-    bl_idname = "VIEW3D_PT_ProceduralBone"
+    bl_idname = "VIEW3D_PT_QuaternionProcedural"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
 
@@ -672,7 +672,7 @@ def register():
     # UI
     bpy.utils.register_class(QuaternionProceduralList)
     bpy.utils.register_class(QuaternionProceduralTriggerList)
-    bpy.utils.register_class(ProceduralBonePanel)
+    bpy.utils.register_class(QuaternionProceduralPanel)
 
     bpy.types.Object.source_procedural_bone_data = bpy.props.PointerProperty(type=SourceProceduralBoneDataProperty)
 
@@ -702,6 +702,6 @@ def unregister():
     # UI
     bpy.utils.unregister_class(QuaternionProceduralList)
     bpy.utils.unregister_class(QuaternionProceduralTriggerList)
-    bpy.utils.unregister_class(ProceduralBonePanel)
+    bpy.utils.unregister_class(QuaternionProceduralPanel)
 
     del bpy.types.Object.source_procedural_bone_data
