@@ -919,6 +919,7 @@ class QuaternionProceduralList(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+        layout.label(text="", icon="PLAY" if item.preview else "PAUSE")
 
 
 class QuaternionProceduralTriggerList(bpy.types.UIList):
@@ -1033,6 +1034,7 @@ class JiggleProceduralList(bpy.types.UIList):
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+        layout.label(text="", icon="PLAY" if item.preview else "PAUSE")
 
 
 class JiggleProceduralPanel(bpy.types.Panel):
