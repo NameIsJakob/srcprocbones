@@ -335,32 +335,31 @@ class CopyQuaternionProceduralOperator(bpy.types.Operator):
         if active_quaternion_procedural.override_position:
             current_position = Vector(active_quaternion_procedural.position_override)
 
-        procedural_string = ""
-
         def get_string_after_dot(input_string):
             parts = input_string.split(".", 1)
             if len(parts) > 1:
                 return parts[1]
             return input_string
 
-        procedural_string += "<helper> " + get_string_after_dot(target_bone.name) + " " + \
-            get_string_after_dot(target_bone.parent.name) + " " + \
-            get_string_after_dot(control_bone.parent.name) + " " + \
-            get_string_after_dot(control_bone.name) + "\n"
+        target_bone_name = get_string_after_dot(target_bone.name)
+        target_bone_parent_name = get_string_after_dot(target_bone.parent.name)
+        control_bone_parent_name = get_string_after_dot(control_bone.parent.name)
+        control_bone_name = get_string_after_dot(control_bone.name)
+        procedural_string = f"<helper> {target_bone_name} {target_bone_parent_name} {control_bone_parent_name} {control_bone_name}\n"
 
-        procedural_string += "<display> 0 0 0 " + str(active_quaternion_procedural.distance if active_quaternion_procedural.override_position else 0) + "\n"
+        procedural_string += f"<display> 0 0 0 {active_quaternion_procedural.distance if active_quaternion_procedural.override_position else 0}\n"
 
-        procedural_string += "<basepos> " + str(current_position.x) + " " + str(current_position.y) + " " + str(current_position.z) + "\n"
+        procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
 
         procedural_string += "<rotateaxis> 0 0 0\n"
 
         procedural_string += "<jointorient> 0 0 0\n"
 
         for trigger in active_quaternion_procedural.triggers:
-            procedural_string += "<trigger> " + str(degrees(trigger.tolerance)) + " " + \
-                " ".join([str(degrees(r)) for r in trigger.trigger_angle]) + " " + \
-                " ".join([str(degrees(r)) for r in trigger.target_angle]) + " " + \
-                " ".join([str(p) for p in trigger.target_position]) + "\n"
+            trigger_angle = " ".join([str(degrees(r)) for r in trigger.trigger_angle])
+            target_angle = " ".join([str(degrees(r)) for r in trigger.target_angle])
+            target_position = " ".join([str(p) for p in trigger.target_position])
+            procedural_string += f"<trigger> {degrees(trigger.tolerance)} {trigger_angle} {target_angle} {target_position}\n"
 
         context.window_manager.clipboard = procedural_string
 
