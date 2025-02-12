@@ -228,7 +228,7 @@ class PreviewQuaternionProceduralOperator(bpy.types.Operator):
         parent_space = transpose_parent @ control_bone.bone.matrix_local
         current_rotation = parent_space @ control_bone.matrix_basis
         for index, trigger in enumerate(active_quaternion_procedural.triggers):
-            if trigger.tolerance <= float_info.epsilon:
+            if abs(trigger.tolerance) <= float_info.epsilon:
                 self.report({"ERROR"}, f"\"{trigger.name}\" Tolerance Is Too Small")
                 self.cancel(context)
                 return {"FINISHED"}
