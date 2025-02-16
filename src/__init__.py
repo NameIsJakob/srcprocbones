@@ -48,8 +48,8 @@ class JiggleProceduralProperty(bpy.types.PropertyGroup):
     target_bone: bpy.props.StringProperty(name="Target Bone", description="The bone that will be procedurally animated")
     tip_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("RIGID", "Rigid", ""), ("FLEXIBLE", "Flexible", "")],
                                           default="FLEXIBLE", name="Tip Flex Type", description="The rotational type of the jiggle procedural")
-    length: bpy.props.FloatProperty(soft_min=0.0, default=10.0, name="Length", description="The length of jiggle procedural")
-    tip_mass: bpy.props.FloatProperty(soft_min=0.0, name="Tip Mass", description="The weight of tip of jiggle procedural")
+    length: bpy.props.FloatProperty(soft_min=0.0, default=10.0, name="Length", description="The distance from the base to the flex tip")
+    tip_mass: bpy.props.FloatProperty(soft_min=0.0, name="Tip Mass", description="An acceleration down at in/s²")
     yaw_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Yaw Stiffness", description="")
     yaw_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Yaw Damping", description="")
     pitch_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Pitch Stiffness", description="")
@@ -624,9 +624,19 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
         self.active_jiggle_procedural = None
         self.timer = None
         self.delta_time = 0.0
+        self.delta_position = Vector()
         self.tip_position = Vector()
         self.tip_velocity = Vector()
         self.last_left = Vector()
+        self.base_position = Vector()
+        self.last_base_position = Vector()
+        self.base_velocity = Vector()
+        self.base_acceleration = Vector()
+        self.last_boing_position = Vector()
+        self.boing_direction = Vector((0.0, 0.0, 1.0))
+        self.boing_velocity_direction = Vector()
+        self.boing_time = 0.0
+        self.boing_speed = 0.0
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
@@ -649,12 +659,7 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             self.last_left = goal_left
             self.base_position = goal_base_position
             self.last_base_position = goal_base_position
-
-            if active_jiggle_procedural.base_flex_type == "SPRING":
-                self.report({"WARNING"}, "Spring Base Flex Not Implemented Yet")
-
-            if active_jiggle_procedural.base_flex_type == "BOING":
-                self.report({"WARNING"}, "Boing Base Flex Not Implemented Yet")
+            self.last_boing_position = goal_base_position
 
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
@@ -685,7 +690,7 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
 
         bone_matrix = target_bone.matrix.normalized()
         goal_matrix = target_bone.bone.matrix_local
-        goal_base_position = bone_matrix.col[3].to_3d()
+        goal_base_position = target_bone.matrix.to_translation() - self.delta_position
         goal_left = goal_matrix.col[0].to_3d()
         goal_up = goal_matrix.col[1].to_3d()
         goal_forward = goal_matrix.col[2].to_3d()
@@ -735,7 +740,7 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
                         cos_yaw = cos(yaw)
 
                         yaw_matrix = Matrix(((cos_yaw, 0.0, sin_yaw, 0.0),
-                                            (0.0, 1.0, 0.0, 0.0,),
+                                            (0.0, 1.0, 0.0, 0.0),
                                             (-sin_yaw, 0.0, cos_yaw, 0.0),
                                             (0.0, 0.0, 0.0, 1.0)))
 
@@ -770,7 +775,7 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
                         cos_pitch = cos(pitch)
 
                         pitch_matrix = Matrix(((1.0, 0.0, 0.0, 0.0),
-                                               (0.0, cos_pitch, sin_pitch, 0.0,),
+                                               (0.0, cos_pitch, sin_pitch, 0.0),
                                                (0.0, -sin_pitch, cos_pitch, 0.0),
                                                (0.0, 0.0, 0.0, 1.0)))
 
@@ -819,6 +824,127 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             bone_matrix[0][2] = forward.x
             bone_matrix[1][2] = forward.y
             bone_matrix[2][2] = forward.z
+
+            bone_matrix[0][3] = goal_base_position.x
+            bone_matrix[1][3] = goal_base_position.y
+            bone_matrix[2][3] = goal_base_position.z
+
+        if active_jiggle_procedural.base_flex_type == "SPRING":
+            self.base_acceleration.z -= active_jiggle_procedural.base_mass
+
+            error = goal_base_position - self.base_position
+            self.base_acceleration += active_jiggle_procedural.base_stiffness * error - active_jiggle_procedural.base_damping * self.base_velocity
+
+            self.base_velocity += self.base_acceleration * self.delta_time
+            self.base_position += self.base_velocity * self.delta_time
+
+            self.base_acceleration = Vector()
+
+            error = self.base_position - goal_base_position
+            local_error = Vector((goal_left.dot(error), goal_up.dot(error), goal_forward.dot(error)))
+
+            local_velocity = Vector((goal_left.dot(self.base_velocity), goal_up.dot(self.base_velocity), goal_forward.dot(self.base_velocity)))
+
+            if local_error.x < active_jiggle_procedural.base_minimum_left:
+                local_error.x = active_jiggle_procedural.base_minimum_left
+                self.base_acceleration -= active_jiggle_procedural.base_friction_left * (local_velocity.y * goal_up + local_velocity.z * goal_forward)
+            elif local_error.x > active_jiggle_procedural.base_maximum_left:
+                local_error.x = active_jiggle_procedural.base_maximum_left
+                self.base_acceleration -= active_jiggle_procedural.base_friction_left * (local_velocity.y * goal_up + local_velocity.z * goal_forward)
+
+            if local_error.y < active_jiggle_procedural.base_minimum_up:
+                local_error.y = active_jiggle_procedural.base_minimum_up
+                self.base_acceleration -= active_jiggle_procedural.base_friction_up * (local_velocity.x * goal_left + local_velocity.z * goal_forward)
+            elif local_error.y > active_jiggle_procedural.base_maximum_up:
+                local_error.y = active_jiggle_procedural.base_maximum_up
+                self.base_acceleration -= active_jiggle_procedural.base_friction_up * (local_velocity.x * goal_left + local_velocity.z * goal_forward)
+
+            if local_error.z < active_jiggle_procedural.base_minimum_forward:
+                local_error.z = active_jiggle_procedural.base_minimum_forward
+                self.base_acceleration -= active_jiggle_procedural.base_friction_forward * (local_velocity.x * goal_left + local_velocity.y * goal_up)
+            elif local_error.z > active_jiggle_procedural.base_maximum_forward:
+                local_error.z = active_jiggle_procedural.base_maximum_forward
+                self.base_acceleration -= active_jiggle_procedural.base_friction_forward * (local_velocity.x * goal_left + local_velocity.y * goal_up)
+
+            self.base_position = goal_base_position + local_error.x * goal_left + local_error.y * goal_up + local_error.z * goal_forward
+
+            # This exist in the jigglebone.cpp but breaks the spring base. Why?
+            # self.base_velocity = (self.base_position - self.last_base_position) / self.delta_time
+            self.last_base_position = self.base_position
+
+            bone_matrix[0][3] = self.base_position.x
+            bone_matrix[1][3] = self.base_position.y
+            bone_matrix[2][3] = self.base_position.z
+
+        if active_jiggle_procedural.base_flex_type == "BOING":
+            velocity = (goal_base_position - self.last_boing_position).normalized()
+            speed = (goal_base_position - self.last_boing_position).length
+            self.last_boing_position = goal_base_position
+
+            if speed < 0.00001:
+                velocity = Vector((0.0, 0.0, 1.0))
+                speed = 0.0
+            else:
+                speed /= self.delta_time
+
+            self.boing_time += self.delta_time
+
+            minimum_speed = 5.0
+            minimum_reboing_time = 0.5
+
+            if (speed > minimum_speed or self.boing_speed > minimum_speed) and self.boing_time > minimum_reboing_time:
+                if abs(self.boing_speed - speed) > active_jiggle_procedural.boing_impact_speed or velocity.dot(self.boing_velocity_direction) < cos(active_jiggle_procedural.boing_impact_angle):
+                    self.boing_time = 0.0
+                    self.boing_direction = -velocity
+
+            self.boing_velocity_direction = velocity
+            self.boing_speed = speed
+
+            damping = 1.0 - (active_jiggle_procedural.boing_damping_rate * self.boing_time)
+
+            if damping < 0.01:
+                bone_matrix = goal_matrix.copy()
+                bone_matrix[0][3] = goal_base_position.x
+                bone_matrix[1][3] = goal_base_position.y
+                bone_matrix[2][3] = goal_base_position.z
+            else:
+                damping *= damping
+                damping *= damping
+
+                flex = active_jiggle_procedural.boing_amplitude * cos(active_jiggle_procedural.boing_frequency * self.boing_time) * damping
+
+                squash = 1.0 + flex
+                stretch = 1.0 - flex
+
+                bone_matrix = goal_matrix.copy()
+                bone_matrix[0][3] = 0.0
+                bone_matrix[1][3] = 0.0
+                bone_matrix[2][3] = 0.0
+
+                boing_side = self.boing_direction.cross(Vector((1.0, 0.0, 0.0)) if abs(self.boing_direction.x) < 0.9 else Vector((0.0, 0.0, 1.0))).normalized()
+                boing_other_side = self.boing_direction.cross(boing_side)
+
+                to_boing = Matrix((
+                    (boing_side.x, boing_other_side.x, self.boing_direction.x),
+                    (boing_side.y, boing_other_side.y, self.boing_direction.y),
+                    (boing_side.z, boing_other_side.z, self.boing_direction.z)
+                ))
+
+                boing = Matrix((
+                    (squash, 0.0, 0.0),
+                    (0.0, squash, 0.0),
+                    (0.0, 0.0, stretch)
+                ))
+
+                from_boing = to_boing.transposed()
+
+                bone_matrix @= (to_boing @ boing @ from_boing).to_4x4()
+
+                bone_matrix[0][3] = goal_base_position.x
+                bone_matrix[1][3] = goal_base_position.y
+                bone_matrix[2][3] = goal_base_position.z
+
+        self.delta_position = bone_matrix.to_translation() - goal_base_position
 
         target_bone.matrix = bone_matrix
         return {"PASS_THROUGH"}
