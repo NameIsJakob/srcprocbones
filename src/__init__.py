@@ -621,10 +621,16 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
     bl_description = "Previews the selected jiggle procedural"
 
     def __init__(self):
-        self.active_jiggle_procedural = None
         self.timer = None
         self.delta_time = 0.0
-        self.delta_position = Vector()
+        self.active_jiggle_procedural = None
+        self.active_armature = None
+        self.active_target_bone = None
+        self.jiggle_bone = None
+        self.location_constraint = None
+        self.rotation_constraint = None
+        self.scale_constraint = None
+
         self.tip_position = Vector()
         self.tip_velocity = Vector()
         self.last_left = Vector()
@@ -646,11 +652,60 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             active_jiggle_procedural.preview = True
             self.active_jiggle_procedural = active_jiggle_procedural
 
-            self.delta_time = 1.0 / context.scene.render.fps
-            self.timer = context.window_manager.event_timer_add(self.delta_time, window=context.window)
+            self.active_armature = context.object
+            self.active_target_bone = context.object.pose.bones[active_jiggle_procedural.target_bone]
 
-            target_bone = context.object.pose.bones[active_jiggle_procedural.target_bone]
-            goal_matrix = target_bone.bone.matrix_local
+            bpy.ops.object.mode_set(mode="EDIT")
+            edit_bones = context.object.data.edit_bones
+            target_bone = edit_bones[active_jiggle_procedural.target_bone]
+            jiggle_bone_name = active_jiggle_procedural.target_bone + " Jiggle Bone"
+            jiggle_bone = edit_bones.get(jiggle_bone_name)
+            if not jiggle_bone:
+                jiggle_bone = edit_bones.new(jiggle_bone_name)
+                jiggle_bone.parent = target_bone.parent
+                jiggle_bone.head = target_bone.head
+                jiggle_bone.tail = target_bone.tail
+                jiggle_bone.roll = target_bone.roll
+            bpy.ops.object.mode_set(mode="POSE")
+            self.jiggle_bone = context.object.pose.bones[jiggle_bone_name]
+
+            self.location_constraint = self.active_target_bone.constraints.get(active_jiggle_procedural.target_bone + " Jiggle Bone Location")
+            if not self.location_constraint:
+                self.location_constraint = self.active_target_bone.constraints.new("COPY_LOCATION")
+                self.location_constraint.show_expanded = False
+                self.location_constraint.name = active_jiggle_procedural.target_bone + " Jiggle Bone Location"
+                self.location_constraint.target = context.object
+                self.location_constraint.subtarget = jiggle_bone_name
+                self.location_constraint.use_offset = True
+                self.location_constraint.target_space = "LOCAL"
+                self.location_constraint.owner_space = "LOCAL"
+                self.location_constraint.influence = 1.0
+
+            self.rotation_constraint = self.active_target_bone.constraints.get(active_jiggle_procedural.target_bone + " Jiggle Bone Rotation")
+            if not self.rotation_constraint:
+                self.rotation_constraint = self.active_target_bone.constraints.new("COPY_ROTATION")
+                self.rotation_constraint.show_expanded = False
+                self.rotation_constraint.name = active_jiggle_procedural.target_bone + " Jiggle Bone Rotation"
+                self.rotation_constraint.target = context.object
+                self.rotation_constraint.subtarget = jiggle_bone_name
+                self.rotation_constraint.use_offset = True
+                self.rotation_constraint.target_space = "LOCAL"
+                self.rotation_constraint.owner_space = "LOCAL"
+                self.rotation_constraint.influence = 1.0
+
+            self.scale_constraint = self.active_target_bone.constraints.get(active_jiggle_procedural.target_bone + " Jiggle Bone Scale")
+            if not self.scale_constraint:
+                self.scale_constraint = self.active_target_bone.constraints.new("COPY_SCALE")
+                self.scale_constraint.show_expanded = False
+                self.scale_constraint.name = active_jiggle_procedural.target_bone + " Jiggle Bone Scale"
+                self.scale_constraint.target = context.object
+                self.scale_constraint.subtarget = jiggle_bone_name
+                self.scale_constraint.use_offset = True
+                self.scale_constraint.target_space = "LOCAL"
+                self.scale_constraint.owner_space = "LOCAL"
+                self.scale_constraint.influence = 1.0
+
+            goal_matrix = target_bone.matrix
             goal_base_position = goal_matrix.col[3].to_3d()
             goal_left = goal_matrix.col[0].to_3d()
             goal_forward = goal_matrix.col[2].to_3d()
@@ -661,6 +716,8 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             self.last_base_position = goal_base_position
             self.last_boing_position = goal_base_position
 
+            self.delta_time = 1.0 / context.scene.render.fps
+            self.timer = context.window_manager.event_timer_add(self.delta_time, window=context.window)
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
 
@@ -683,18 +740,21 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             self.cancel(context)
             return {"FINISHED"}
 
-        target_bone = context.object.pose.bones.get(active_jiggle_procedural.target_bone)
-        if not target_bone:
-            self.cancel(context)
-            return {"FINISHED"}
+        # TODO: Check for different bone selected
 
-        bone_matrix = target_bone.matrix.normalized()
-        goal_matrix = target_bone.bone.matrix_local
-        goal_base_position = target_bone.matrix.to_translation() - self.delta_position
+        target_bone_parent_bind_inverted = self.active_target_bone.parent.bone.matrix_local.inverted_safe()
+        target_bone_parent_pose_transforms = target_bone_parent_bind_inverted @ self.active_target_bone.parent.matrix
+        target_bone_parent_bind_offset = target_bone_parent_bind_inverted @ self.active_target_bone.bone.matrix_local
+        target_bone_local_pose_transforms = target_bone_parent_bind_offset @ self.active_target_bone.matrix_basis
+        target_bone_transforms = target_bone_parent_pose_transforms @ target_bone_local_pose_transforms
+
+        goal_matrix = (self.active_target_bone.parent.bone.matrix_local @ target_bone_transforms).normalized()
         goal_left = goal_matrix.col[0].to_3d()
         goal_up = goal_matrix.col[1].to_3d()
         goal_forward = goal_matrix.col[2].to_3d()
+        goal_base_position = goal_matrix.col[3].to_3d()
         goal_tip = goal_base_position + active_jiggle_procedural.length * goal_forward
+        bone_matrix = self.jiggle_bone.matrix.normalized()
 
         if active_jiggle_procedural.tip_flex_type == "RIGID" or active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
             tip_acceleration = Vector()
@@ -944,9 +1004,12 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
                 bone_matrix[1][3] = goal_base_position.y
                 bone_matrix[2][3] = goal_base_position.z
 
-        self.delta_position = bone_matrix.to_translation() - goal_base_position
+        try:
+            self.jiggle_bone.matrix = bone_matrix
+        except:
+            self.cancel(context)
+            return {"FINISHED"}
 
-        target_bone.matrix = bone_matrix
         return {"PASS_THROUGH"}
 
     def cancel(self, context):
@@ -957,6 +1020,27 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
         if self.active_jiggle_procedural is not None:
             self.active_jiggle_procedural.preview = False
             self.active_jiggle_procedural = None
+
+        try:
+            self.active_target_bone.constraints.remove(self.location_constraint)
+        except:
+            pass
+        try:
+            self.active_target_bone.constraints.remove(self.rotation_constraint)
+        except:
+            pass
+        try:
+            self.active_target_bone.constraints.remove(self.scale_constraint)
+        except:
+            pass
+
+        try:
+            bpy.ops.object.mode_set(mode="EDIT")
+            edit_bones = self.active_armature.data.edit_bones
+            edit_bones.remove(edit_bones.get(self.jiggle_bone.name))
+            bpy.ops.object.mode_set(mode="POSE")
+        except:
+            pass
 
 
 class CopyJiggleProceduralOperator(bpy.types.Operator):
