@@ -46,26 +46,32 @@ class QuaternionProceduralProperty(bpy.types.PropertyGroup):
 class JiggleProceduralProperty(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="New Jiggle Procedural", name="Name", description="The name of the jiggle procedural")
     target_bone: bpy.props.StringProperty(name="Target Bone", description="The bone that will be procedurally animated")
-    tip_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("RIGID", "Rigid", ""), ("FLEXIBLE", "Flexible", "")],
+    tip_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", "No Rotational Jiggle"), ("RIGID", "Rigid", "A Simple Rotational Jiggle"), ("FLEXIBLE", "Flexible", "A Complex Rotational Jiggle")],
                                           default="FLEXIBLE", name="Tip Flex Type", description="The rotational type of the jiggle procedural")
     length: bpy.props.FloatProperty(soft_min=0.0, default=10.0, name="Length", description="The distance from the base to the flex tip")
     tip_mass: bpy.props.FloatProperty(soft_min=0.0, name="Tip Mass", description="An acceleration down at in/s²")
-    yaw_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Yaw Stiffness", description="")
-    yaw_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Yaw Damping", description="")
-    pitch_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Pitch Stiffness", description="")
-    pitch_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Pitch Damping", description="")
-    along_constraint: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("CONSTRAINT", "Constraint", "")],
-                                             default="CONSTRAINT", name="Along Constraint", description="")
-    along_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Pitch Stiffness", description="")
-    along_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Pitch Damping", description="")
-    angle_constraint: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("CONSTRAINT", "Constraint", "")], name="Angle Constraint", description="")
-    angle_limit: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Angle Limit", description="")
-    yaw_constraint: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("CONSTRAINT", "Constraint", "")], name="Yaw Constraint", description="")
-    yaw_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Yaw Minimum", description="")
-    yaw_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Yaw Maximum", description="")
-    pitch_constraint: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("CONSTRAINT", "Constraint", "")], name="Pitch Constraint", description="")
-    pitch_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Pitch Minimum", description="")
-    pitch_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Pitch Maximum", description="")
+    yaw_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Yaw Stiffness",
+                                           description="The speed of the jiggle on the Y axis")
+    yaw_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Yaw Damping", description="A velocity reduction of the jiggle on the Y axis")
+    pitch_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Pitch Stiffness",
+                                             description="The speed of the jiggle on the X axis")
+    pitch_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Pitch Damping", description="A velocity reduction of the jiggle on the X axis")
+    along_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "The Tip Length Is Allow To Jiggle"), ("CONSTRAINT", "Constraint", "The Tip Length Is Locked")],
+                                             default="CONSTRAINT", name="Along Constraint", description="Specify if the tip can jiggle")
+    along_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Pitch Stiffness",
+                                             description="The speed of the jiggle on the Z axis")
+    along_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Pitch Damping", description="A velocity reduction of the jiggle on the Z axis")
+    angle_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "No Angle Constraint"), ("CONSTRAINT", "Constraint",
+                                             "Jiggle Will Be Constraint By An Angle")], name="Angle Constraint", description="Constraint jiggle bone by an angle")
+    angle_limit: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Angle Limit", description="The angle to constrain the jiggle bone")
+    yaw_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "Jiggle Not Constrained On The X"), ("CONSTRAINT", "Constraint",
+                                           "Jiggle Constrained On The X")], name="Yaw Constraint", description="Specify if the yaw is constrained by 2 angles")
+    yaw_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Yaw Minimum", description="The minimum angle the yaw can rotate")
+    yaw_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Yaw Maximum", description="The maximum angle the yaw can rotate")
+    pitch_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "Jiggle Not Constrained On The Y"), ("CONSTRAINT", "Constraint",
+                                             "Jiggle Constrained On The Y")], name="Pitch Constraint", description="Specify if the pitch is constrained by 2 angles")
+    pitch_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Pitch Minimum", description="The minimum angle the pitch can rotate")
+    pitch_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Pitch Maximum", description="The maximum angle the pitch can rotate")
     base_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("SPRING", "Spring", ""),
                                            ("BOING", "Boing", "")], name="Base Flex Type", description="")
     base_mass: bpy.props.FloatProperty(name="Base Mass", description="")
