@@ -72,25 +72,32 @@ class JiggleProceduralProperty(bpy.types.PropertyGroup):
                                              "Jiggle Constrained On The Y")], name="Pitch Constraint", description="Specify if the pitch is constrained by 2 angles")
     pitch_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Pitch Minimum", description="The minimum angle the pitch can rotate")
     pitch_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Pitch Maximum", description="The maximum angle the pitch can rotate")
-    base_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", ""), ("SPRING", "Spring", ""),
-                                           ("BOING", "Boing", "")], name="Base Flex Type", description="")
-    base_mass: bpy.props.FloatProperty(name="Base Mass", description="")
-    base_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Base Stiffness", description="")
-    base_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Base Damping", description="")
-    base_minimum_left: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Left", description="")
-    base_maximum_left: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Maximum Left", description="")
-    base_friction_left: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Left", description="")
-    base_minimum_up: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Up", description="")
-    base_maximum_up: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Maximum Up", description="")
-    base_friction_up: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Up", description="")
-    base_minimum_forward: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Forward", description="")
-    base_maximum_forward: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Minimum Forward", description="")
-    base_friction_forward: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Forward", description="")
-    boing_impact_speed: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Boing Impact Speed", description="")
-    boing_impact_angle: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", default=radians(45.0), name="Boing Impact Angle", description="")
-    boing_damping_rate: bpy.props.FloatProperty(soft_min=0.0, default=0.25, name="Boing Damping Rate", description="")
-    boing_frequency: bpy.props.FloatProperty(soft_min=0.0, default=30.0, name="Boing Frequency", description="")
-    boing_amplitude: bpy.props.FloatProperty(soft_min=0.0, default=0.35, name="Boing Amplitude", description="")
+    base_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", "No Base Jiggle"), ("SPRING", "Spring", "Translational Jiggling"),
+                                           ("BOING", "Boing", "Boing Jiggling")], name="Base Flex Type", description="Flex type for the base of the jiggle procedural")
+    base_mass: bpy.props.FloatProperty(name="Base Mass", description="An acceleration down at in/s²")
+    base_stiffness: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, default=100.0, name="Base Stiffness", description="The speed of the jiggle")
+    base_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Base Damping", description="A velocity reduction of the jiggle")
+    base_minimum_left: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Left", description="The minimum offset the jiggle on the X")
+    base_maximum_left: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Maximum Left", description="The maximum offset the jiggle on the X")
+    base_friction_left: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Left",
+                                                description="When at limit, apply acceleration in opposite direction on the X")
+    base_minimum_up: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Up", description="The minimum offset the jiggle on the Y")
+    base_maximum_up: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Maximum Up", description="The maximum offset the jiggle on the Y")
+    base_friction_up: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Up",
+                                              description="When at limit, apply acceleration in opposite direction on the Y")
+    base_minimum_forward: bpy.props.FloatProperty(soft_max=0.0, default=-100.0, name="Base Minimum Forward",
+                                                  description="The minimum offset the jiggle on the Z")
+    base_maximum_forward: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Base Minimum Forward",
+                                                  description="The maximum offset the jiggle on the Z")
+    base_friction_forward: bpy.props.FloatProperty(soft_min=0.0, name="Base Friction Forward",
+                                                   description="When at limit, apply acceleration in opposite direction on the Z")
+    boing_impact_speed: bpy.props.FloatProperty(soft_min=0.0, default=100.0, name="Boing Impact Speed",
+                                                description="The speed of the jiggle to create a impact")
+    boing_impact_angle: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", default=radians(
+        45.0), name="Boing Impact Angle", description="The angle difference of velocity to create a impact")
+    boing_damping_rate: bpy.props.FloatProperty(soft_min=0.0, default=0.25, name="Boing Damping Rate", description="The speed the jiggle settles")
+    boing_frequency: bpy.props.FloatProperty(soft_min=0.0, default=30.0, name="Boing Frequency", description="The speed of the squash and stretch")
+    boing_amplitude: bpy.props.FloatProperty(soft_min=0.0, default=0.35, name="Boing Amplitude", description="The strength of the squash and stretch")
     preview: bpy.props.BoolProperty()
 
 
@@ -748,13 +755,16 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
 
         # TODO: Check for different bone selected
 
-        target_bone_parent_bind_inverted = self.active_target_bone.parent.bone.matrix_local.inverted_safe()
-        target_bone_parent_pose_transforms = target_bone_parent_bind_inverted @ self.active_target_bone.parent.matrix
-        target_bone_parent_bind_offset = target_bone_parent_bind_inverted @ self.active_target_bone.bone.matrix_local
-        target_bone_local_pose_transforms = target_bone_parent_bind_offset @ self.active_target_bone.matrix_basis
-        target_bone_transforms = target_bone_parent_pose_transforms @ target_bone_local_pose_transforms
+        if self.active_target_bone.parent:
+            target_bone_parent_bind_inverted = self.active_target_bone.parent.bone.matrix_local.inverted_safe()
+            target_bone_parent_pose_transforms = target_bone_parent_bind_inverted @ self.active_target_bone.parent.matrix
+            target_bone_parent_bind_offset = target_bone_parent_bind_inverted @ self.active_target_bone.bone.matrix_local
+            target_bone_local_pose_transforms = target_bone_parent_bind_offset @ self.active_target_bone.matrix_basis
+            target_bone_transforms = target_bone_parent_pose_transforms @ target_bone_local_pose_transforms
+            goal_matrix = (self.active_target_bone.parent.bone.matrix_local @ target_bone_transforms).normalized()
+        else:
+            goal_matrix = (self.active_target_bone.bone.matrix_local @ self.active_target_bone.matrix_basis).normalized()
 
-        goal_matrix = (self.active_target_bone.parent.bone.matrix_local @ target_bone_transforms).normalized()
         goal_left = goal_matrix.col[0].to_3d()
         goal_up = goal_matrix.col[1].to_3d()
         goal_forward = goal_matrix.col[2].to_3d()
