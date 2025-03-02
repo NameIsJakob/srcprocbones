@@ -682,7 +682,7 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
                 self.location_constraint.name = active_jiggle_procedural.target_bone + " Jiggle Bone Location"
                 self.location_constraint.target = context.object
                 self.location_constraint.subtarget = jiggle_bone_name
-                self.location_constraint.use_offset = True
+                self.location_constraint.use_offset = False
                 self.location_constraint.target_space = "LOCAL"
                 self.location_constraint.owner_space = "LOCAL"
                 self.location_constraint.influence = 1.0
