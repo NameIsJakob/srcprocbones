@@ -753,7 +753,9 @@ class PreviewJiggleProceduralOperator(bpy.types.Operator):
             self.cancel(context)
             return {"FINISHED"}
 
-        # TODO: Check for different bone selected
+        if self.active_target_bone.name != self.active_jiggle_procedural.target_bone:
+            self.cancel(context)
+            return {"FINISHED"}
 
         if self.active_target_bone.parent:
             target_bone_parent_bind_inverted = self.active_target_bone.parent.bone.matrix_local.inverted_safe()
