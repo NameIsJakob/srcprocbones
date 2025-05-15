@@ -810,6 +810,53 @@ class CopyQuaternionProceduralOperator(bpy.types.Operator):
 
         return {"FINISHED"}
 
+
+class CopyAllEnabledQuaternionProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.quaternion_copy_all_enabled"
+    bl_label = "Copy All Enabled Quaternion Procedural"
+    bl_description = "Copies all the enabled quaternion procedural to the clipboard"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_count = sum(1 for quaternion_procedural in source_procedural_bone_data.quaternion_procedurals if quaternion_procedural.preview)
+        return active_count > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_quaternion_procedural_index = source_procedural_bone_data.active_quaternion_procedural
+        quaternion_procedurals = source_procedural_bone_data.quaternion_procedurals
+
+        all_procedural_strings = []
+
+        for (procedural_index, quaternion_procedural) in enumerate(quaternion_procedurals):
+            if not quaternion_procedural.preview:
+                continue
+
+            target_bone = context.object.pose.bones.get(quaternion_procedural.target_bone)
+            control_bone = context.object.pose.bones.get(quaternion_procedural.control_bone)
+
+            if target_bone is None or control_bone is None:
+                continue
+
+            if target_bone.parent is None or control_bone.parent is None:
+                continue
+
+            if not len(quaternion_procedural.triggers):
+                continue
+
+            source_procedural_bone_data.active_quaternion_procedural = procedural_index
+            bpy.ops.source_procedural.quaternion_copy()
+            all_procedural_strings.append(context.window_manager.clipboard)
+
+        source_procedural_bone_data.active_quaternion_procedural = active_quaternion_procedural_index
+
+        if len(all_procedural_strings):
+            context.window_manager.clipboard = "\n".join(all_procedural_strings)
+
+        return {"FINISHED"}
+
+
 # endregion
 
 # region Quaternion Procedural Trigger Operators
@@ -1139,9 +1186,47 @@ class CopyJiggleProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CopyAllEnabledJiggleProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.jiggle_copy_all_enabled"
+    bl_label = "Copy All Enabled Jiggle Procedural"
+    bl_description = "Copies all enabled jiggle procedural to the clipboard"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_count = sum(1 for jiggle_procedural in source_procedural_bone_data.jiggle_procedurals if jiggle_procedural.preview)
+        return active_count > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_jiggle_procedural_index = source_procedural_bone_data.active_jiggle_procedural
+        jiggle_procedurals = source_procedural_bone_data.jiggle_procedurals
+
+        all_procedural_strings = []
+
+        for (procedural_index, jiggle_procedural) in enumerate(jiggle_procedurals):
+            if not jiggle_procedural.preview:
+                continue
+
+            target_bone = context.object.pose.bones.get(jiggle_procedural.target_bone)
+            if target_bone is None:
+                continue
+
+            source_procedural_bone_data.active_jiggle_procedural = procedural_index
+            bpy.ops.source_procedural.jiggle_copy()
+            all_procedural_strings.append(context.window_manager.clipboard)
+
+        source_procedural_bone_data.active_jiggle_procedural = active_jiggle_procedural_index
+
+        if len(all_procedural_strings):
+            context.window_manager.clipboard = "\n".join(all_procedural_strings)
+
+        return {"FINISHED"}
+
 # endregion
 
 # region UI
+
 
 class PreviewingOptionsPanel(bpy.types.Panel):
     bl_category = "Src Proc Bones"
@@ -1203,6 +1288,8 @@ class QuaternionProceduralPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        layout.operator(CopyAllEnabledQuaternionProceduralOperator.bl_idname)
 
         row = layout.row(align=True)
         row.template_list(QuaternionProceduralList.bl_idname, "", source_procedural_bone_data,
@@ -1337,6 +1424,8 @@ class JiggleProceduralPanel(bpy.types.Panel):
         layout = self.layout
         source_procedural_bone_data = context.object.source_procedural_bone_data
 
+        layout.operator(CopyAllEnabledJiggleProceduralOperator.bl_idname)
+
         row = layout.row(align=True)
         row.template_list(JiggleProceduralList.bl_idname, "", source_procedural_bone_data,
                           "jiggle_procedurals", source_procedural_bone_data, "active_jiggle_procedural")
@@ -1468,6 +1557,7 @@ def register():
     bpy.utils.register_class(AddQuaternionProceduralOperator)
     bpy.utils.register_class(RemoveQuaternionProceduralOperator)
     bpy.utils.register_class(CopyQuaternionProceduralOperator)
+    bpy.utils.register_class(CopyAllEnabledQuaternionProceduralOperator)
 
     # Quaternion Procedural Trigger Operators
     bpy.utils.register_class(AddQuaternionProceduralTriggerOperator)
@@ -1483,6 +1573,7 @@ def register():
     bpy.utils.register_class(AddJiggleProceduralOperator)
     bpy.utils.register_class(RemoveJiggleProceduralOperator)
     bpy.utils.register_class(CopyJiggleProceduralOperator)
+    bpy.utils.register_class(CopyAllEnabledJiggleProceduralOperator)
 
     # UI
     bpy.utils.register_class(PreviewingOptionsPanel)
@@ -1509,6 +1600,7 @@ def unregister():
     bpy.utils.unregister_class(AddQuaternionProceduralOperator)
     bpy.utils.unregister_class(RemoveQuaternionProceduralOperator)
     bpy.utils.unregister_class(CopyQuaternionProceduralOperator)
+    bpy.utils.unregister_class(CopyAllEnabledQuaternionProceduralOperator)
 
     # Quaternion Procedural Trigger Operators
     bpy.utils.unregister_class(AddQuaternionProceduralTriggerOperator)
@@ -1524,6 +1616,7 @@ def unregister():
     bpy.utils.unregister_class(AddJiggleProceduralOperator)
     bpy.utils.unregister_class(RemoveJiggleProceduralOperator)
     bpy.utils.unregister_class(CopyJiggleProceduralOperator)
+    bpy.utils.unregister_class(CopyAllEnabledJiggleProceduralOperator)
 
     # UI
     bpy.utils.unregister_class(PreviewingOptionsPanel)
