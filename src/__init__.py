@@ -1223,6 +1223,21 @@ class CopyAllEnabledJiggleProceduralOperator(bpy.types.Operator):
 
         return {"FINISHED"}
 
+
+class ClearJiggleBoneData(bpy.types.Operator):
+    bl_idname = "source_procedural.jiggle_clear"
+    bl_label = "Clear All Jiggle Preview Data"
+    bl_description = "Clears all jiggle procedural preview data"
+
+    def execute(self, context):
+        for bone in context.object.pose.bones:
+            constraint_postfixes = (" Jiggle Bone Location", " Jiggle Bone Rotation", " Jiggle Bone Scale")
+            constraints_to_remove = [constraint for constraint in bone.constraints if constraint.name.endswith(constraint_postfixes)]
+            for constraint_name in constraints_to_remove:
+                bone.constraints.remove(constraint_name)
+
+        return {"FINISHED"}
+
 # endregion
 
 # region UI
@@ -1250,6 +1265,8 @@ class PreviewingOptionsPanel(bpy.types.Panel):
 
         source_procedural_previewing_data = context.scene.source_procedural_previewing_data
         layout.prop(source_procedural_previewing_data, "update_rate")
+
+        layout.operator(ClearJiggleBoneData.bl_idname)
 
 
 class QuaternionProceduralList(bpy.types.UIList):
@@ -1574,6 +1591,7 @@ def register():
     bpy.utils.register_class(RemoveJiggleProceduralOperator)
     bpy.utils.register_class(CopyJiggleProceduralOperator)
     bpy.utils.register_class(CopyAllEnabledJiggleProceduralOperator)
+    bpy.utils.register_class(ClearJiggleBoneData)
 
     # UI
     bpy.utils.register_class(PreviewingOptionsPanel)
@@ -1617,6 +1635,7 @@ def unregister():
     bpy.utils.unregister_class(RemoveJiggleProceduralOperator)
     bpy.utils.unregister_class(CopyJiggleProceduralOperator)
     bpy.utils.unregister_class(CopyAllEnabledJiggleProceduralOperator)
+    bpy.utils.unregister_class(ClearJiggleBoneData)
 
     # UI
     bpy.utils.unregister_class(PreviewingOptionsPanel)
