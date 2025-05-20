@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 type = "add-on"
 id = "srcprocbones"
-version = "2.2.0"
+version = "2.2.1"
 name = "Source Engine Procedural Bones"
 tagline = "A panel that create procedural bones for source engine models"
 tags = ["Animation"]
