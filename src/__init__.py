@@ -618,7 +618,7 @@ class QuaternionProceduralProperty(bpy.types.PropertyGroup):
                                       description="The percentage of the control bone's position offset from its parent added to the target bone's position")
     triggers: bpy.props.CollectionProperty(type=QuaternionProceduralTriggerProperty)
     active_trigger: bpy.props.IntProperty(name="Active Trigger")
-    preview: bpy.props.BoolProperty(options={"SKIP_SAVE"})
+    preview: bpy.props.BoolProperty(default=True)
 
 
 class JiggleProceduralProperty(bpy.types.PropertyGroup):
@@ -681,7 +681,7 @@ class JiggleProceduralProperty(bpy.types.PropertyGroup):
     boing_damping_rate: bpy.props.FloatProperty(soft_min=0.0, default=0.25, name="Boing Damping Rate", description="The speed the jiggle settles")
     boing_frequency: bpy.props.FloatProperty(soft_min=0.0, default=30.0, name="Boing Frequency", description="The speed of the squash and stretch")
     boing_amplitude: bpy.props.FloatProperty(soft_min=0.0, default=0.35, name="Boing Amplitude", description="The strength of the squash and stretch")
-    preview: bpy.props.BoolProperty(options={"SKIP_SAVE"})
+    preview: bpy.props.BoolProperty(default=True)
     # Run Time Data
     last_update: bpy.props.FloatProperty(options={"SKIP_SAVE"})
     base_position: bpy.props.FloatVectorProperty(options={"SKIP_SAVE"})
