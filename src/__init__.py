@@ -909,7 +909,7 @@ class CreateAllEnabledQuaternionProceduralCommandOperator(bpy.types.Operator):
                 continue
 
             source_procedural_bone_data.active_quaternion_procedural = procedural_index
-            bpy.ops.source_procedural.quaternion_copy()
+            bpy.ops.source_procedural.quaternion_create_command()
             all_procedural_strings.append(context.window_manager.clipboard)
 
         source_procedural_bone_data.active_quaternion_procedural = active_quaternion_procedural_index
@@ -1383,7 +1383,7 @@ class CreateAllEnabledJiggleProceduralCommandOperator(bpy.types.Operator):
                 continue
 
             source_procedural_bone_data.active_jiggle_procedural = procedural_index
-            bpy.ops.source_procedural.jiggle_copy()
+            bpy.ops.source_procedural.jiggle_create_command()
             all_procedural_strings.append(context.window_manager.clipboard)
 
         source_procedural_bone_data.active_jiggle_procedural = active_jiggle_procedural_index
