@@ -2,12 +2,12 @@ schema_version = "1.0.0"
 
 type = "add-on"
 id = "srcprocbones"
-version = "2.3.0"
+version = "2.3.1"
 name = "Source Engine Procedural Bones"
 tagline = "A panel that create procedural bones for source engine models"
 tags = ["Animation"]
-website = "https://github.com/Jakobg1215/srcprocbones/"
-maintainer = "Jakobg1215"
+website = "https://github.com/NameIsJakob/srcprocbones/"
+maintainer = "NameIsJakob"
 license = ["SPDX:MIT"]
 blender_version_min = "4.2.0"
 
