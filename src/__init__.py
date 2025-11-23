@@ -118,6 +118,46 @@ def simulate_quaternion_procedural(previewer, quaternion_procedural):
     target_bone.matrix_basis = target_bone_transposed @ target_bone.parent.bone.matrix_local @ target_translation @ target_rotation.to_4x4()
 
 
+def simulate_aimat_procedural(previewer, aimat_procedural):
+    # The math for this is the same but gets different results from source.
+    procedural_bone = previewer.pose.bones.get(aimat_procedural.procedural_bone)
+    if procedural_bone is None or procedural_bone.parent is None:
+        return
+
+    aim_target = aimat_procedural.aim_target
+    if aim_target is None:
+        return
+
+    aim_direction = Vector(aimat_procedural.aim_vector).normalized()
+    if aim_direction.length <= float_info.epsilon:
+        aimat_procedural.aim_vector = Vector((1.0, 0.0, 0.0))
+    up_direction = Vector(aimat_procedural.up_vector).normalized()
+    if up_direction.length <= float_info.epsilon:
+        aimat_procedural.up_vector = Vector((0.0, 0.0, 1.0))
+
+    procedural_position = procedural_bone.matrix.translation
+    target_position = aim_target.matrix_world.translation
+    target_direction = (target_position - procedural_position).normalized()
+
+    aim_axis = aim_direction.cross(target_direction).normalized()
+    aim_angle = acos(aim_direction.dot(target_direction))
+    aim_rotation = Matrix.Rotation(aim_angle, 4, aim_axis)
+
+    temp_up = aim_rotation @ up_direction
+    temp_up_direction = target_direction * target_direction.dot(temp_up)
+    up = (temp_up - temp_up_direction).normalized()
+
+    temp_parent_up = procedural_bone.bone.matrix_local @ up_direction
+    temp_parent_up_direction = target_direction * target_direction.dot(temp_parent_up)
+    parent_up = (temp_parent_up - temp_parent_up_direction).normalized()
+
+    up_axis = up.cross(parent_up).normalized()
+    up_angle = up.dot(parent_up)
+    up_rotation = Matrix.Rotation(acos(up_angle), 4, up_axis) if 1.0 - abs(up_angle) > float_info.epsilon else Matrix.Rotation(0, 4, parent_up)
+
+    procedural_bone.matrix = Matrix.Translation(procedural_position) @ up_rotation @ aim_rotation
+
+
 def simulate_jiggle_procedural(previewer, active_jiggle_procedural, current_time):
     target_bone = previewer.pose.bones.get(active_jiggle_procedural.target_bone)
     if target_bone is None:
@@ -556,6 +596,12 @@ def previewing():
 
             simulate_quaternion_procedural(previewer.armature, quaternion_procedural)
 
+        for aimat_procedural in source_procedural_bone_data.aimat_procedurals:
+            if not aimat_procedural.preview:
+                continue
+
+            simulate_aimat_procedural(previewer.armature, aimat_procedural)
+
         for jiggle_procedural in source_procedural_bone_data.jiggle_procedurals:
             if not jiggle_procedural.preview:
                 continue
@@ -635,6 +681,25 @@ def copy_quaternion_procedural(source, destination):
     for trigger in source.triggers:
         destination.triggers.add()
         copy_quaternion_procedural_trigger(trigger, destination.triggers[len(destination.triggers) - 1])
+
+
+class AimatProceduralProperty(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty(default="New Aimat Procedural", name="Name", description="The name of the aimat procedural")
+    procedural_bone: bpy.props.StringProperty(name="Procedural Bone", description="The bone that will be procedurally animated")
+    aim_target: bpy.props.PointerProperty(name="Aim Target", description="The attachment the procedural bone will target",
+                                          type=bpy.types.Object, poll=lambda self, object: object.type == 'EMPTY')
+    aim_vector: bpy.props.FloatVectorProperty(default=(1.0, 0.0, 0.0), precision=6, name="Aim Vector",
+                                              description="The direction the bone will point towards the target")
+    up_vector: bpy.props.FloatVectorProperty(default=(0.0, 0.0, 1.0), precision=6, name="Up Vector",
+                                             description="The direction of up for the bone")
+    preview: bpy.props.BoolProperty(default=True)
+
+
+def copy_aimat_procedural(source, destination):
+    destination.name = source.name
+    destination.aim_target = source.aim_target
+    destination.aim_vector = source.aim_vector
+    destination.up_vector = source.up_vector
 
 
 class JiggleProceduralProperty(bpy.types.PropertyGroup):
@@ -761,6 +826,8 @@ def copy_jiggle_procedural(source, destination):
 class SourceProceduralBoneDataProperty(bpy.types.PropertyGroup):
     quaternion_procedurals: bpy.props.CollectionProperty(type=QuaternionProceduralProperty)
     active_quaternion_procedural: bpy.props.IntProperty(name="Active Quaternion Procedural")
+    aimat_procedurals: bpy.props.CollectionProperty(type=AimatProceduralProperty)
+    active_aimat_procedural: bpy.props.IntProperty(name="Active Aimat Procedural")
     jiggle_procedurals: bpy.props.CollectionProperty(type=JiggleProceduralProperty)
     active_jiggle_procedural: bpy.props.IntProperty(name="Active Jiggle Procedural")
     previewing: bpy.props.BoolProperty(update=update_previewing, options={"SKIP_SAVE"})
@@ -775,9 +842,17 @@ class SourceProceduralPreviewingDataProperty(bpy.types.PropertyGroup):
     update_rate: bpy.props.IntProperty(name="Update Rate", default=60, min=1, soft_min=20, soft_max=300)
     quaternion_procedural_trigger_copy: bpy.props.PointerProperty(type=QuaternionProceduralTriggerProperty)
     quaternion_procedural_copy: bpy.props.PointerProperty(type=QuaternionProceduralProperty)
+    aimat_procedural_copy: bpy.props.PointerProperty(type=AimatProceduralProperty)
     jiggle_procedural_copy: bpy.props.PointerProperty(type=JiggleProceduralProperty)
 
 # endregion
+
+
+def get_string_after_dot(input_string):
+    parts = input_string.split(".", 1)
+    if len(parts) > 1:
+        return parts[1]
+    return input_string
 
 # region Quaternion Procedural Operators
 
@@ -842,12 +917,6 @@ class CreateQuaternionProceduralCommandOperator(bpy.types.Operator):
 
         if active_quaternion_procedural.override_position:
             current_position = Vector(active_quaternion_procedural.position_override)
-
-        def get_string_after_dot(input_string):
-            parts = input_string.split(".", 1)
-            if len(parts) > 1:
-                return parts[1]
-            return input_string
 
         target_bone_name = get_string_after_dot(target_bone.name)
         target_bone_parent_name = get_string_after_dot(target_bone.parent.name)
@@ -1230,6 +1299,165 @@ class RemoveAllQuaternionProceduralTriggerOperator(bpy.types.Operator):
         active_quaternion_procedural = source_procedural_bone_data.quaternion_procedurals[source_procedural_bone_data.active_quaternion_procedural]
         active_quaternion_procedural.triggers.clear()
         return {"FINISHED"}
+
+# endregion
+
+# region Aimat Procedural Operators
+
+
+class AddAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_add"
+    bl_label = "Add Aimat Procedural"
+    bl_description = "Adds a new Aimat procedural"
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.aimat_procedurals.add()
+        source_procedural_bone_data.active_aimat_procedural = len(source_procedural_bone_data.aimat_procedurals) - 1
+
+        return {"FINISHED"}
+
+
+class RemoveAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_remove"
+    bl_label = "Remove Aimat Procedural"
+    bl_description = "Removes the selected aimat procedural"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        return len(source_procedural_bone_data.aimat_procedurals) != 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
+
+        active_aimat_procedural.preview = False
+        source_procedural_bone_data.aimat_procedurals.remove(source_procedural_bone_data.active_aimat_procedural)
+
+        if source_procedural_bone_data.active_aimat_procedural > 0:
+            source_procedural_bone_data.active_aimat_procedural -= 1
+
+        return {"FINISHED"}
+
+
+class CreateAimatProceduralCommandOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_create_command"
+    bl_label = "Create Aimat Procedural"
+    bl_description = "Creates the selected Aimat procedural vrd command to the clipboard"
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
+        procedural_bone = context.object.pose.bones[active_aimat_procedural.procedural_bone]
+
+        procedural_bone_name = get_string_after_dot(procedural_bone.name)
+        procedural_bone_parent_name = get_string_after_dot(procedural_bone.parent.name)
+        aim_vector = " ".join([str(p) for p in active_aimat_procedural.aim_vector])
+        up_vector = " ".join([str(p) for p in active_aimat_procedural.up_vector])
+        current_position = (procedural_bone.parent.bone.matrix_local.inverted_safe() @ procedural_bone.bone.matrix_local).to_translation()
+        procedural_string = f"<aimconstraint> {procedural_bone_name} {procedural_bone_parent_name} {active_aimat_procedural.aim_target.name}\n"
+        procedural_string += f"<aimvector> {aim_vector}\n"
+        procedural_string += f"<upvector> {up_vector}\n"
+        procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
+
+        context.window_manager.clipboard = procedural_string
+
+        return {"FINISHED"}
+
+
+class CreateAllEnabledAimatProceduralCommandOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_create_all_command_enabled"
+    bl_label = "Create All Enabled Aimat Procedural"
+    bl_description = "Creates all enabled aimat procedural vrd commands to the clipboard"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_count = sum(1 for aimat_procedural in source_procedural_bone_data.aimat_procedurals if aimat_procedural.preview)
+        return active_count > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_aimat_procedural_index = source_procedural_bone_data.active_aimat_procedural
+        aimat_procedurals = source_procedural_bone_data.aimat_procedurals
+
+        all_procedural_strings = []
+
+        for (procedural_index, aimat_procedural) in enumerate(aimat_procedurals):
+            if not aimat_procedural.preview:
+                continue
+
+            procedural_bone = context.object.pose.bones.get(aimat_procedural.procedural_bone)
+            if procedural_bone is None or procedural_bone.parent is None:
+                continue
+
+            aim_target = aimat_procedural.aim_target
+            if aim_target is None:
+                continue
+
+            source_procedural_bone_data.active_aimat_procedural = procedural_index
+            bpy.ops.source_procedural.aimat_create_command()
+            all_procedural_strings.append(context.window_manager.clipboard)
+
+        source_procedural_bone_data.active_aimat_procedural = active_aimat_procedural_index
+
+        if len(all_procedural_strings):
+            context.window_manager.clipboard = "\n".join(all_procedural_strings)
+
+        return {"FINISHED"}
+
+
+class CopyAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_copy"
+    bl_label = "Copy Aimat Procedural"
+    bl_description = "Copy the Aimat procedural parameters"
+
+    @classmethod
+    def poll(cls, context):
+        return len(context.object.source_procedural_bone_data.aimat_procedurals)
+
+    def execute(self, context):
+        aimat_procedural_copy = context.scene.source_procedural_previewing_data.aimat_procedural_copy
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
+        copy_aimat_procedural(active_aimat_procedural, aimat_procedural_copy)
+        return {"FINISHED"}
+
+
+class PasteAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_paste"
+    bl_label = "Paste Aimat Procedural"
+    bl_description = "Paste the Aimat procedural parameters"
+
+    @classmethod
+    def poll(cls, context):
+        return len(context.object.source_procedural_bone_data.quaternion_procedurals)
+
+    def execute(self, context):
+        aimat_procedural_copy = context.scene.source_procedural_previewing_data.aimat_procedural_copy
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
+        copy_aimat_procedural(aimat_procedural_copy, active_aimat_procedural)
+        return {"FINISHED"}
+
+
+class RemoveAllAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_remove_all"
+    bl_label = "Remove All Aimat Procedural"
+    bl_description = "Removes all Aimat procedurals"
+
+    @classmethod
+    def poll(cls, context):
+        return len(context.object.source_procedural_bone_data.aimat_procedurals)
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        source_procedural_bone_data.aimat_procedurals.clear()
+        return {"FINISHED"}
+
 
 # endregion
 
@@ -1708,6 +1936,99 @@ class QuaternionProceduralPanel(bpy.types.Panel):
         col.operator(PreviewQuaternionProceduralTriggerOperator.bl_idname, text="Preview Trigger")
 
 
+class AimatProceduralContextMenu(bpy.types.Menu):
+    bl_idname = "OBJECT_MT_AimatProceduralContextMenu"
+    bl_label = "Aimat Context"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator(CreateAllEnabledAimatProceduralCommandOperator.bl_idname)
+        layout.operator(CopyAimatProceduralOperator.bl_idname)
+        layout.operator(PasteAimatProceduralOperator.bl_idname)
+        layout.operator(RemoveAllAimatProceduralOperator.bl_idname)
+
+
+class AimatProceduralList(bpy.types.UIList):
+    bl_idname = "OBJECT_UL_AimatProceduralList"
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+        layout.prop(item, "preview", text="", icon="PLAY" if item.preview else "PAUSE")
+
+
+class AimatProceduralPanel(bpy.types.Panel):
+    bl_category = "Src Proc Bones"
+    bl_label = "Aimat Procedurals"
+    bl_idname = "VIEW3D_PT_AimatProceduralPanel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == "ARMATURE"
+
+    def draw(self, context):
+        layout = self.layout
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        row = layout.row(align=True)
+        row.template_list(AimatProceduralList.bl_idname, "", source_procedural_bone_data,
+                          "aimat_procedurals", source_procedural_bone_data, "active_aimat_procedural")
+
+        col = row.column(align=True)
+        col.operator(AddAimatProceduralOperator.bl_idname, text="", icon="ADD")
+        col.operator(RemoveAimatProceduralOperator.bl_idname, text="", icon="REMOVE")
+        col.separator()
+        col.menu(AimatProceduralContextMenu.bl_idname, text="", icon="DOWNARROW_HLT")
+
+        if len(source_procedural_bone_data.aimat_procedurals) == 0:
+            return
+
+        active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
+
+        col = layout.column(align=True)
+        col.prop(active_aimat_procedural, "name", text="")
+
+        box = col.box()
+        col = box.column(align=True)
+
+        col.prop_search(active_aimat_procedural, "procedural_bone", context.object.pose, "bones", text="")
+        col.prop(active_aimat_procedural, "aim_target", text="")
+
+        procedural_bone = context.object.pose.bones.get(active_aimat_procedural.procedural_bone)
+        aim_target = active_aimat_procedural.aim_target
+
+        row = box.row(align=True)
+        if procedural_bone is None:
+            row.alert = True
+            label_row = box.row()
+            label_row.alert = True
+            label_row.label(text="Procedural Bone Not Found!")
+        elif aim_target is None:
+            row.alert = True
+            label_row = box.row()
+            label_row.alert = True
+            label_row.label(text="Aim Target Not Found!")
+        elif procedural_bone.parent is None:
+            row.alert = True
+            label_row = box.row()
+            label_row.alert = True
+            label_row.label(text="Procedural Bone Has No Parent!")
+
+        if row.alert:
+            return
+
+        preview_text = "Disallow Previewing" if active_aimat_procedural.preview else "Allow Previewing"
+        preview_icon = "PLAY" if active_aimat_procedural.preview else "PAUSE"
+        box.prop(active_aimat_procedural, "preview", text=preview_text, icon_only=True, icon=preview_icon)
+        box.operator(CreateAimatProceduralCommandOperator.bl_idname, text="Create Procedural")
+
+        box.prop(active_aimat_procedural, "aim_vector")
+        box.prop(active_aimat_procedural, "up_vector")
+
+
 class JiggleProceduralContextMenu(bpy.types.Menu):
     bl_idname = "OBJECT_MT_JiggleProceduralContextMenu"
     bl_label = "Jiggle Context"
@@ -1871,6 +2192,7 @@ def register():
     # Properties
     bpy.utils.register_class(QuaternionProceduralTriggerProperty)
     bpy.utils.register_class(QuaternionProceduralProperty)
+    bpy.utils.register_class(AimatProceduralProperty)
     bpy.utils.register_class(JiggleProceduralProperty)
     bpy.utils.register_class(SourceProceduralBoneDataProperty)
     bpy.utils.register_class(PreviewingArmatureObject)
@@ -1898,6 +2220,15 @@ def register():
     bpy.utils.register_class(PasteQuaternionProceduralTriggerOperator)
     bpy.utils.register_class(RemoveAllQuaternionProceduralTriggerOperator)
 
+    # Aimat Procedural Operators
+    bpy.utils.register_class(AddAimatProceduralOperator)
+    bpy.utils.register_class(RemoveAimatProceduralOperator)
+    bpy.utils.register_class(CreateAimatProceduralCommandOperator)
+    bpy.utils.register_class(CreateAllEnabledAimatProceduralCommandOperator)
+    bpy.utils.register_class(CopyAimatProceduralOperator)
+    bpy.utils.register_class(PasteAimatProceduralOperator)
+    bpy.utils.register_class(RemoveAllAimatProceduralOperator)
+
     # Jiggle Procedural Operators
     bpy.utils.register_class(AddJiggleProceduralOperator)
     bpy.utils.register_class(RemoveJiggleProceduralOperator)
@@ -1917,6 +2248,9 @@ def register():
     bpy.utils.register_class(QuaternionProceduralTriggerContextMenu)
     bpy.utils.register_class(QuaternionProceduralTriggerList)
     bpy.utils.register_class(QuaternionProceduralPanel)
+    bpy.utils.register_class(AimatProceduralContextMenu)
+    bpy.utils.register_class(AimatProceduralList)
+    bpy.utils.register_class(AimatProceduralPanel)
     bpy.utils.register_class(JiggleProceduralContextMenu)
     bpy.utils.register_class(JiggleProceduralList)
     bpy.utils.register_class(JiggleProceduralPanel)
@@ -1929,6 +2263,7 @@ def unregister():
     # Properties
     bpy.utils.unregister_class(QuaternionProceduralTriggerProperty)
     bpy.utils.unregister_class(QuaternionProceduralProperty)
+    bpy.utils.unregister_class(AimatProceduralProperty)
     bpy.utils.unregister_class(JiggleProceduralProperty)
     bpy.utils.unregister_class(SourceProceduralBoneDataProperty)
     bpy.utils.unregister_class(PreviewingArmatureObject)
@@ -1956,6 +2291,15 @@ def unregister():
     bpy.utils.unregister_class(PasteQuaternionProceduralTriggerOperator)
     bpy.utils.unregister_class(RemoveAllQuaternionProceduralTriggerOperator)
 
+    # Aimat Procedural Operators
+    bpy.utils.unregister_class(AddAimatProceduralOperator)
+    bpy.utils.unregister_class(RemoveAimatProceduralOperator)
+    bpy.utils.unregister_class(CreateAimatProceduralCommandOperator)
+    bpy.utils.unregister_class(CreateAllEnabledAimatProceduralCommandOperator)
+    bpy.utils.unregister_class(CopyAimatProceduralOperator)
+    bpy.utils.unregister_class(PasteAimatProceduralOperator)
+    bpy.utils.unregister_class(RemoveAllAimatProceduralOperator)
+
     # Jiggle Procedural Operators
     bpy.utils.unregister_class(AddJiggleProceduralOperator)
     bpy.utils.unregister_class(RemoveJiggleProceduralOperator)
@@ -1975,6 +2319,9 @@ def unregister():
     bpy.utils.unregister_class(QuaternionProceduralTriggerContextMenu)
     bpy.utils.unregister_class(QuaternionProceduralTriggerList)
     bpy.utils.unregister_class(QuaternionProceduralPanel)
+    bpy.utils.unregister_class(AimatProceduralContextMenu)
+    bpy.utils.unregister_class(AimatProceduralList)
+    bpy.utils.unregister_class(AimatProceduralPanel)
     bpy.utils.unregister_class(JiggleProceduralContextMenu)
     bpy.utils.unregister_class(JiggleProceduralList)
     bpy.utils.unregister_class(JiggleProceduralPanel)
