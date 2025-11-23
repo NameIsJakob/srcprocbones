@@ -10,7 +10,7 @@ bl_info = {
     "category": "Animation",
     "description": "A panel that helps create procedural bones for source engine models.",
     "author": "NameIsJakob",
-    "version": (2, 3, 1),
+    "version": (2, 3, 2),
     "blender": (2, 80, 0),
     "location": "View3D > Src Proc Bones",
     "tracker_url": "https://github.com/NameIsJakob/srcprocbones/issues",
