@@ -1,9 +1,13 @@
 
 import bpy
 from sys import float_info
-from math import degrees, radians, acos, pi, sin, atan2, cos
+from math import degrees, radians, acos, pi, sin, atan2, cos, tan
 from mathutils import Euler, Matrix, Vector, Quaternion
 from time import perf_counter as now
+import gpu
+from gpu_extras.batch import batch_for_shader
+if bpy.app.version < (2, 93):
+    import bgl
 
 bl_info = {
     "name": "Source Engine Procedural Bones",
@@ -192,10 +196,11 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, current_time
         rotation_constraint.show_expanded = False
         rotation_constraint.name = rotation_constraint_name
         rotation_constraint.target = jiggle_bone_data
-        if bpy.app.version[:2] == (2, 80):
-            rotation_constraint.use_offset = True
-        else:
+        if bpy.app.version >= (2, 81):
             rotation_constraint.mix_mode = "ADD"
+        else:
+            rotation_constraint.use_offset = True
+
         rotation_constraint.target_space = "LOCAL"
         rotation_constraint.owner_space = "LOCAL"
 
@@ -2187,6 +2192,103 @@ class JiggleProceduralPanel(bpy.types.Panel):
 
 # endregion
 
+debug_shader = gpu.shader.from_builtin('UNIFORM_COLOR' if bpy.app.version >= (3, 4) else '3D_UNIFORM_COLOR')
+
+def create_cone(start, left, up, forward, length, angle):
+    radius = tan(angle) * length
+    center = start + forward * length
+    resolution = 32
+    vertices = [start]
+    for point_index in range(resolution):
+        rotation = point_index / resolution * 2.0 * pi
+        x = cos(rotation) * radius
+        y = sin(rotation) * radius
+        vertices.append(center + left * x + up * y)
+    indices = []
+    for i in range(1, resolution + 1):
+        next_i = 1 if i == resolution else i + 1
+        indices.append([0, next_i, i])
+    return (vertices, indices)
+
+def create_wall(start, up, forward, length, width, angle):
+    rotation = Matrix.Rotation(angle, 3, up)
+    return [
+        start + -up * length,
+        start + (rotation @ (up * length + forward * width)),
+        start + up * length,
+        start + -up * length,
+        start + (rotation @ (-up * length + forward * width)),
+        start + (rotation @ (up * length + forward * width))
+    ]
+
+def debug_draw():
+    context = bpy.context
+    if context.object is None or context.object.type != "ARMATURE":
+        return
+
+    if bpy.app.version >= (2, 93):
+        gpu.state.blend_set('ALPHA')
+    else:
+        bgl.glEnable(bgl.GL_BLEND)
+
+    debug_shader.bind()
+
+    source_procedural_bone_data = context.object.source_procedural_bone_data
+    jiggle_procedurals = source_procedural_bone_data.jiggle_procedurals
+
+    for jiggle_procedual in jiggle_procedurals:
+        target_bone = context.object.pose.bones.get(jiggle_procedual.target_bone)
+        if target_bone is None:
+            continue
+
+        if context.selected_pose_bones_from_active_object is None:
+            continue
+
+        if not any(pose_bone == target_bone for pose_bone in context.selected_pose_bones_from_active_object):
+            continue
+
+        matrix = Matrix()
+        if target_bone.parent:
+            matrix = (target_bone.parent.matrix @ target_bone.parent.bone.matrix_local.inverted_safe()
+                      @ target_bone.bone.matrix_local @ target_bone.matrix_basis).normalized()
+        else:
+            matrix = (target_bone.bone.matrix_local @ target_bone.matrix_basis).normalized()
+
+        if jiggle_procedual.angle_constraint == "CONSTRAINT":
+            debug_shader.uniform_float("color", (0.0, 0.0, 1.0, 0.50))
+            cone = create_cone(matrix.col[3].to_3d(), matrix.col[0].to_3d(), matrix.col[1].to_3d(), matrix.col[2].to_3d(), 5, jiggle_procedual.angle_limit)
+            batch = batch_for_shader(debug_shader, 'TRIS', {"pos": cone[0]}, indices=cone[1])
+            batch.draw(debug_shader)
+
+        if jiggle_procedual.yaw_constraint == "CONSTRAINT":
+            debug_shader.uniform_float("color", (0.0, 1.0, 0.0, 0.50))
+            position = matrix.col[3].to_3d()
+            up = matrix.col[1].to_3d()
+            forward = matrix.col[2].to_3d()
+
+            minimum_wall = create_wall(position, up, forward, 2.5, 5.0, jiggle_procedual.yaw_minimum)
+            batch = batch_for_shader(debug_shader, 'TRIS', {"pos": minimum_wall})
+            batch.draw(debug_shader)
+
+            maximum_wall = create_wall(position, up, forward, 2.5, 5.0, jiggle_procedual.yaw_maximum)
+            batch = batch_for_shader(debug_shader, 'TRIS', {"pos": maximum_wall})
+            batch.draw(debug_shader)
+
+        if jiggle_procedual.pitch_constraint == "CONSTRAINT":
+            debug_shader.uniform_float("color", (1.0, 0.0, 0.0, 0.50))
+            position = matrix.col[3].to_3d()
+            left = matrix.col[0].to_3d()
+            forward = matrix.col[2].to_3d()
+
+            minimum_wall = create_wall(position, -left, forward, 2.5, 5.0, jiggle_procedual.pitch_minimum)
+            batch = batch_for_shader(debug_shader, 'TRIS', {"pos": minimum_wall})
+            batch.draw(debug_shader)
+
+            maximum_wall = create_wall(position, -left, forward, 2.5, 5.0, jiggle_procedual.pitch_maximum)
+            batch = batch_for_shader(debug_shader, 'TRIS', {"pos": maximum_wall})
+            batch.draw(debug_shader)
+
+draw_handler = None
 
 def register():
     # Properties
@@ -2257,6 +2359,9 @@ def register():
 
     bpy.types.Object.source_procedural_bone_data = bpy.props.PointerProperty(type=SourceProceduralBoneDataProperty)
     bpy.types.Scene.source_procedural_previewing_data = bpy.props.PointerProperty(type=SourceProceduralPreviewingDataProperty)
+
+    global draw_handler
+    draw_handler = bpy.types.SpaceView3D.draw_handler_add(debug_draw, (), 'WINDOW', 'POST_VIEW')
 
 
 def unregister():
@@ -2331,3 +2436,7 @@ def unregister():
 
     del bpy.types.Object.source_procedural_bone_data
     del bpy.types.Scene.source_procedural_previewing_data
+
+    global draw_handler
+    if draw_handler:
+        bpy.types.SpaceView3D.draw_handler_remove(draw_handler, 'WINDOW')
