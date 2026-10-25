@@ -1737,6 +1737,44 @@ class RemoveAllJiggleProceduralOperator(bpy.types.Operator):
         source_procedural_bone_data.jiggle_procedurals.clear()
         return {"FINISHED"}
 
+class MoveUpJiggleProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.jiggle_move_up"
+    bl_label = "Move Up Jiggle Procedural"
+    bl_description = "Moves the selected jiggle up"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_jiggle_procedural > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural, source_procedural_bone_data.active_jiggle_procedural - 1)
+        source_procedural_bone_data.active_jiggle_procedural -= 1
+
+        return {"FINISHED"}
+
+
+class MoveDownJiggleProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.jiggle_move_down"
+    bl_label = "Move Down Jiggle Procedural"
+    bl_description = "Moves the selected jiggle down"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_jiggle_procedural < len(source_procedural_bone_data.jiggle_procedurals) - 1
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural, source_procedural_bone_data.active_jiggle_procedural + 1)
+        source_procedural_bone_data.active_jiggle_procedural += 1
+
+        return {"FINISHED"}
+
+
 # endregion
 
 # region UI
@@ -2082,6 +2120,9 @@ class JiggleProceduralPanel(bpy.types.Panel):
         col.operator(RemoveJiggleProceduralOperator.bl_idname, text="", icon="REMOVE")
         col.separator()
         col.menu(JiggleProceduralContextMenu.bl_idname, text="", icon="DOWNARROW_HLT")
+        col.separator()
+        col.operator(MoveUpJiggleProceduralOperator.bl_idname, text="", icon="TRIA_UP")
+        col.operator(MoveDownJiggleProceduralOperator.bl_idname, text="", icon="TRIA_DOWN")
 
         if len(source_procedural_bone_data.jiggle_procedurals) == 0:
             return
@@ -2342,6 +2383,8 @@ def register():
     bpy.utils.register_class(AddSelectedBonesJiggleProceduralOperator)
     bpy.utils.register_class(AddSelectedBonesFromActiveJiggleProceduralOperator)
     bpy.utils.register_class(RemoveAllJiggleProceduralOperator)
+    bpy.utils.register_class(MoveUpJiggleProceduralOperator)
+    bpy.utils.register_class(MoveDownJiggleProceduralOperator)
 
     # UI
     bpy.utils.register_class(PreviewingOptionsPanel)
@@ -2416,6 +2459,8 @@ def unregister():
     bpy.utils.unregister_class(AddSelectedBonesJiggleProceduralOperator)
     bpy.utils.unregister_class(AddSelectedBonesFromActiveJiggleProceduralOperator)
     bpy.utils.unregister_class(RemoveAllJiggleProceduralOperator)
+    bpy.utils.unregister_class(MoveUpJiggleProceduralOperator)
+    bpy.utils.unregister_class(MoveDownJiggleProceduralOperator)
 
     # UI
     bpy.utils.unregister_class(PreviewingOptionsPanel)
