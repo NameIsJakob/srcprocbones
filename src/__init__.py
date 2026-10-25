@@ -350,14 +350,12 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, current_time
                     limit_along = Vector((limit_left.dot(along), limit_up.dot(along), limit_forward.dot(along)))
 
                     active_jiggle_procedural.tip_position = goal_base_position + limit_along.y * limit_up + limit_along.z * limit_forward
-                    if active_jiggle_procedural.use_friction:
-                        limit_velocity = Vector((0.0, limit_up.dot(tip_velocity()), limit_forward.dot(tip_velocity())))
-                        active_jiggle_procedural.tip_acceleration = tip_acceleration() - active_jiggle_procedural.yaw_friction * \
-                            (limit_velocity.y * limit_up + limit_velocity.z * limit_forward)
-                        active_jiggle_procedural.tip_velocity = -active_jiggle_procedural.yaw_bounce * \
-                            limit_velocity.x * limit_left + limit_velocity.y * limit_up + limit_velocity.z * limit_forward
-                    else:
-                        active_jiggle_procedural.tip_velocity = Vector()
+
+                    limit_velocity = Vector((0.0, limit_up.dot(tip_velocity()), limit_forward.dot(tip_velocity())))
+                    active_jiggle_procedural.tip_acceleration = tip_acceleration() - active_jiggle_procedural.yaw_friction * \
+                        (limit_velocity.y * limit_up + limit_velocity.z * limit_forward)
+                    active_jiggle_procedural.tip_velocity = -active_jiggle_procedural.yaw_bounce * \
+                        limit_velocity.x * limit_left + limit_velocity.y * limit_up + limit_velocity.z * limit_forward
 
                     along = tip_position() - goal_base_position
                     local_along = Vector((goal_left.dot(along), goal_up.dot(along), goal_forward.dot(along)))
@@ -392,14 +390,12 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, current_time
                     limit_along = Vector((limit_left.dot(along), limit_up.dot(along), limit_forward.dot(along)))
 
                     active_jiggle_procedural.tip_position = goal_base_position + limit_along.x * limit_left + limit_along.z * limit_forward
-                    if active_jiggle_procedural.use_friction:
-                        limit_velocity = Vector((0.0, limit_up.dot(tip_velocity()), limit_forward.dot(tip_velocity())))
-                        active_jiggle_procedural.tip_acceleration = tip_acceleration() - active_jiggle_procedural.pitch_friction * \
-                            (limit_velocity.x * limit_left + limit_velocity.z * limit_forward)
-                        active_jiggle_procedural.tip_velocity = limit_velocity.x * limit_left - \
-                            active_jiggle_procedural.pitch_bounce * limit_velocity.y * limit_up + limit_velocity.z * limit_forward
-                    else:
-                        active_jiggle_procedural.tip_velocity = Vector()
+
+                    limit_velocity = Vector((0.0, limit_up.dot(tip_velocity()), limit_forward.dot(tip_velocity())))
+                    active_jiggle_procedural.tip_acceleration = tip_acceleration() - active_jiggle_procedural.pitch_friction * \
+                        (limit_velocity.x * limit_left + limit_velocity.z * limit_forward)
+                    active_jiggle_procedural.tip_velocity = limit_velocity.x * limit_left - \
+                        active_jiggle_procedural.pitch_bounce * limit_velocity.y * limit_up + limit_velocity.z * limit_forward
 
         forward = (tip_position() - goal_base_position).normalized()
 
@@ -727,18 +723,22 @@ class JiggleProceduralProperty(bpy.types.PropertyGroup):
     along_damping: bpy.props.FloatProperty(soft_min=0.0, soft_max=1000.0, name="Pitch Damping", description="A velocity reduction of the jiggle on the Z axis")
     angle_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "No Angle Constraint"), ("CONSTRAINT", "Constraint",
                                              "Jiggle Will Be Constraint By An Angle")], name="Angle Constraint", description="Constraint jiggle bone by an angle")
-    angle_limit: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Angle Limit", description="The angle to constrain the jiggle bone")
-    use_friction: bpy.props.BoolProperty(name="Use Friction", description="Use the friction and bounce values")
+    angle_limit: bpy.props.FloatProperty(soft_min=0.0, soft_max=radians(90.0), default=radians(30.0), unit="ROTATION",
+                                         name="Angle Limit", description="The angle to constrain the jiggle bone")
     yaw_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "Jiggle Not Constrained On The X"), ("CONSTRAINT", "Constraint",
                                            "Jiggle Constrained On The X")], name="Yaw Constraint", description="Specify if the yaw is constrained by 2 angles")
-    yaw_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Yaw Minimum", description="The minimum angle the yaw can rotate")
-    yaw_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Yaw Maximum", description="The maximum angle the yaw can rotate")
+    yaw_minimum: bpy.props.FloatProperty(soft_max=0.0, soft_min=radians(-90.0), default=radians(-30.0), unit="ROTATION",
+                                         name="Yaw Minimum", description="The minimum angle the yaw can rotate")
+    yaw_maximum: bpy.props.FloatProperty(soft_min=0.0, soft_max=radians(90.0), default=radians(30.0), unit="ROTATION",
+                                         name="Yaw Maximum", description="The maximum angle the yaw can rotate")
     yaw_friction: bpy.props.FloatProperty(soft_min=0.0, name="Yaw Friction", description="A acceleration reduction on the X")
     yaw_bounce: bpy.props.FloatProperty(soft_min=0.0, name="Yaw Bounce", description="Velocity set on the X in the opposite direction")
     pitch_constraint: bpy.props.EnumProperty(items=[("NONE", "None", "Jiggle Not Constrained On The Y"), ("CONSTRAINT", "Constraint",
                                              "Jiggle Constrained On The Y")], name="Pitch Constraint", description="Specify if the pitch is constrained by 2 angles")
-    pitch_minimum: bpy.props.FloatProperty(soft_max=0.0, unit="ROTATION", name="Pitch Minimum", description="The minimum angle the pitch can rotate")
-    pitch_maximum: bpy.props.FloatProperty(soft_min=0.0, unit="ROTATION", name="Pitch Maximum", description="The maximum angle the pitch can rotate")
+    pitch_minimum: bpy.props.FloatProperty(soft_max=0.0, soft_min=radians(-90.0), default=radians(-30.0), unit="ROTATION",
+                                           name="Pitch Minimum", description="The minimum angle the pitch can rotate")
+    pitch_maximum: bpy.props.FloatProperty(soft_min=0.0, soft_max=radians(90.0), default=radians(30.0), unit="ROTATION",
+                                           name="Pitch Maximum", description="The maximum angle the pitch can rotate")
     pitch_friction: bpy.props.FloatProperty(soft_min=0.0, name="Pitch Friction", description="A acceleration reduction on the Y")
     pitch_bounce: bpy.props.FloatProperty(soft_min=0.0, name="Pitch Bounce", description="Velocity set on the Y in the opposite direction")
     base_flex_type: bpy.props.EnumProperty(items=[("NONE", "None", "No Base Jiggle"), ("SPRING", "Spring", "Translational Jiggling"),
@@ -797,7 +797,6 @@ def copy_jiggle_procedural(source, destination):
     destination.along_damping = source.along_damping
     destination.angle_constraint = source.angle_constraint
     destination.angle_limit = source.angle_limit
-    destination.use_friction = source.use_friction
     destination.yaw_constraint = source.yaw_constraint
     destination.yaw_minimum = source.yaw_minimum
     destination.yaw_maximum = source.yaw_maximum
@@ -1532,15 +1531,13 @@ def create_jiggle_command(target_bone, active_jiggle_procedural):
 
         if active_jiggle_procedural.yaw_constraint == "CONSTRAINT":
             procedural_string += f"\t\tyaw_constraint {degrees(active_jiggle_procedural.yaw_minimum)} {degrees(active_jiggle_procedural.yaw_maximum)}\n"
-            if active_jiggle_procedural.use_friction:
-                procedural_string += f"\t\tyaw_friction {active_jiggle_procedural.yaw_friction}\n"
-                procedural_string += f"\t\tyaw_bounce {active_jiggle_procedural.yaw_bounce}\n"
+            procedural_string += f"\t\tyaw_friction {active_jiggle_procedural.yaw_friction}\n"
+            procedural_string += f"\t\tyaw_bounce {active_jiggle_procedural.yaw_bounce}\n"
 
         if active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
             procedural_string += f"\t\tpitch_constraint {degrees(active_jiggle_procedural.pitch_minimum)} {degrees(active_jiggle_procedural.pitch_maximum)}\n"
-            if active_jiggle_procedural.use_friction:
-                procedural_string += f"\t\tpitch_friction {active_jiggle_procedural.pitch_friction}\n"
-                procedural_string += f"\t\tpitch_bounce {active_jiggle_procedural.pitch_bounce}\n"
+            procedural_string += f"\t\tpitch_friction {active_jiggle_procedural.pitch_friction}\n"
+            procedural_string += f"\t\tpitch_bounce {active_jiggle_procedural.pitch_bounce}\n"
 
         procedural_string += "\t}\n"
 
@@ -2166,18 +2163,14 @@ class JiggleProceduralPanel(bpy.types.Panel):
             if active_jiggle_procedural.angle_constraint == "CONSTRAINT":
                 col.prop(active_jiggle_procedural, "angle_limit")
 
-            if active_jiggle_procedural.yaw_constraint == "CONSTRAINT" or active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
-                col.prop(active_jiggle_procedural, "use_friction")
-
             col.label(text="Yaw Constraint")
             col.prop(active_jiggle_procedural, "yaw_constraint", text="")
             if active_jiggle_procedural.yaw_constraint == "CONSTRAINT":
                 row = col.row(align=True)
                 row.prop(active_jiggle_procedural, "yaw_minimum")
                 row.prop(active_jiggle_procedural, "yaw_maximum")
-                if active_jiggle_procedural.use_friction:
-                    col.prop(active_jiggle_procedural, "yaw_friction")
-                    col.prop(active_jiggle_procedural, "yaw_bounce")
+                col.prop(active_jiggle_procedural, "yaw_friction")
+                col.prop(active_jiggle_procedural, "yaw_bounce")
 
             col.label(text="Pitch Constraint")
             col.prop(active_jiggle_procedural, "pitch_constraint", text="")
@@ -2185,9 +2178,8 @@ class JiggleProceduralPanel(bpy.types.Panel):
                 row = col.row(align=True)
                 row.prop(active_jiggle_procedural, "pitch_minimum")
                 row.prop(active_jiggle_procedural, "pitch_maximum")
-                if active_jiggle_procedural.use_friction:
-                    col.prop(active_jiggle_procedural, "pitch_friction")
-                    col.prop(active_jiggle_procedural, "pitch_bounce")
+                col.prop(active_jiggle_procedural, "pitch_friction")
+                col.prop(active_jiggle_procedural, "pitch_bounce")
 
         col = box.column(align=True)
         col.label(text="Base Flex Type")
