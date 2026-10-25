@@ -1710,9 +1710,6 @@ class AddSelectedBonesFromActiveJiggleProceduralOperator(bpy.types.Operator):
         active_jiggle_procedural = source_procedural_bone_data.jiggle_procedurals[source_procedural_bone_data.active_jiggle_procedural]
 
         for selected_bone in bpy.context.selected_pose_bones:
-            if selected_bone == context.active_pose_bone:
-                continue
-
             bpy.ops.source_procedural.jiggle_add()
             source_procedural_bone_data = context.object.source_procedural_bone_data
             created_jiggle_procedural = source_procedural_bone_data.jiggle_procedurals[source_procedural_bone_data.active_jiggle_procedural]
