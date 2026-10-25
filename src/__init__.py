@@ -900,6 +900,27 @@ class RemoveQuaternionProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def create_quaternion_command(target_bone, control_bone, active_quaternion_procedural, current_position):
+    target_bone_name = get_string_after_dot(target_bone.name)
+    target_bone_parent_name = get_string_after_dot(target_bone.parent.name)
+    control_bone_parent_name = get_string_after_dot(control_bone.parent.name)
+    control_bone_name = get_string_after_dot(control_bone.name)
+
+    procedural_string = f"<helper> {target_bone_name} {target_bone_parent_name} {control_bone_parent_name} {control_bone_name}\n"
+    procedural_string += f"<display> 0 0 0 {active_quaternion_procedural.distance if active_quaternion_procedural.override_position else 0}\n"
+    procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
+    procedural_string += "<rotateaxis> 0 0 0\n"
+    procedural_string += "<jointorient> 0 0 0\n"
+
+    for trigger in active_quaternion_procedural.triggers:
+        trigger_angle = " ".join([str(degrees(r)) for r in trigger.trigger_angle])
+        target_angle = " ".join([str(degrees(r)) for r in trigger.target_angle])
+        target_position = " ".join([str(p) for p in trigger.target_position])
+        procedural_string += f"<trigger> {degrees(trigger.tolerance)} {trigger_angle} {target_angle} {target_position}\n"
+
+    return procedural_string
+
+
 class CreateQuaternionProceduralCommandOperator(bpy.types.Operator):
     bl_idname = "source_procedural.quaternion_create_command"
     bl_label = "Create Quaternion Procedural"
@@ -923,26 +944,7 @@ class CreateQuaternionProceduralCommandOperator(bpy.types.Operator):
         if active_quaternion_procedural.override_position:
             current_position = Vector(active_quaternion_procedural.position_override)
 
-        target_bone_name = get_string_after_dot(target_bone.name)
-        target_bone_parent_name = get_string_after_dot(target_bone.parent.name)
-        control_bone_parent_name = get_string_after_dot(control_bone.parent.name)
-        control_bone_name = get_string_after_dot(control_bone.name)
-        procedural_string = f"<helper> {target_bone_name} {target_bone_parent_name} {control_bone_parent_name} {control_bone_name}\n"
-
-        procedural_string += f"<display> 0 0 0 {active_quaternion_procedural.distance if active_quaternion_procedural.override_position else 0}\n"
-
-        procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
-
-        procedural_string += "<rotateaxis> 0 0 0\n"
-
-        procedural_string += "<jointorient> 0 0 0\n"
-
-        for trigger in active_quaternion_procedural.triggers:
-            trigger_angle = " ".join([str(degrees(r)) for r in trigger.trigger_angle])
-            target_angle = " ".join([str(degrees(r)) for r in trigger.target_angle])
-            target_position = " ".join([str(p) for p in trigger.target_position])
-            procedural_string += f"<trigger> {degrees(trigger.tolerance)} {trigger_angle} {target_angle} {target_position}\n"
-
+        procedural_string = create_quaternion_command(target_bone, control_bone, active_quaternion_procedural, current_position)
         context.window_manager.clipboard = procedural_string
 
         return {"FINISHED"}
@@ -961,12 +963,11 @@ class CreateAllEnabledQuaternionProceduralCommandOperator(bpy.types.Operator):
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
-        active_quaternion_procedural_index = source_procedural_bone_data.active_quaternion_procedural
         quaternion_procedurals = source_procedural_bone_data.quaternion_procedurals
 
         all_procedural_strings = []
 
-        for (procedural_index, quaternion_procedural) in enumerate(quaternion_procedurals):
+        for quaternion_procedural in quaternion_procedurals:
             if not quaternion_procedural.preview:
                 continue
 
@@ -982,11 +983,11 @@ class CreateAllEnabledQuaternionProceduralCommandOperator(bpy.types.Operator):
             if not len(quaternion_procedural.triggers):
                 continue
 
-            source_procedural_bone_data.active_quaternion_procedural = procedural_index
-            bpy.ops.source_procedural.quaternion_create_command()
-            all_procedural_strings.append(context.window_manager.clipboard)
+            current_position = (target_bone.parent.bone.matrix_local.inverted_safe() @ target_bone.bone.matrix_local).to_translation()
+            if quaternion_procedural.override_position:
+                current_position = Vector(quaternion_procedural.position_override)
 
-        source_procedural_bone_data.active_quaternion_procedural = active_quaternion_procedural_index
+            all_procedural_strings.append(create_quaternion_command(target_bone, control_bone, quaternion_procedural, current_position))
 
         if len(all_procedural_strings):
             context.window_manager.clipboard = "\n".join(all_procedural_strings)
@@ -1348,6 +1349,19 @@ class RemoveAimatProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def create_aimat_command(procedural_bone, active_aimat_procedural):
+    procedural_bone_name = get_string_after_dot(procedural_bone.name)
+    procedural_bone_parent_name = get_string_after_dot(procedural_bone.parent.name)
+    aim_vector = " ".join([str(p) for p in active_aimat_procedural.aim_vector])
+    up_vector = " ".join([str(p) for p in active_aimat_procedural.up_vector])
+    current_position = (procedural_bone.parent.bone.matrix_local.inverted_safe() @ procedural_bone.bone.matrix_local).to_translation()
+    procedural_string = f"<aimconstraint> {procedural_bone_name} {procedural_bone_parent_name} {active_aimat_procedural.aim_target.name}\n"
+    procedural_string += f"<aimvector> {aim_vector}\n"
+    procedural_string += f"<upvector> {up_vector}\n"
+    procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
+    return procedural_string
+
+
 class CreateAimatProceduralCommandOperator(bpy.types.Operator):
     bl_idname = "source_procedural.aimat_create_command"
     bl_label = "Create Aimat Procedural"
@@ -1357,19 +1371,7 @@ class CreateAimatProceduralCommandOperator(bpy.types.Operator):
         source_procedural_bone_data = context.object.source_procedural_bone_data
         active_aimat_procedural = source_procedural_bone_data.aimat_procedurals[source_procedural_bone_data.active_aimat_procedural]
         procedural_bone = context.object.pose.bones[active_aimat_procedural.procedural_bone]
-
-        procedural_bone_name = get_string_after_dot(procedural_bone.name)
-        procedural_bone_parent_name = get_string_after_dot(procedural_bone.parent.name)
-        aim_vector = " ".join([str(p) for p in active_aimat_procedural.aim_vector])
-        up_vector = " ".join([str(p) for p in active_aimat_procedural.up_vector])
-        current_position = (procedural_bone.parent.bone.matrix_local.inverted_safe() @ procedural_bone.bone.matrix_local).to_translation()
-        procedural_string = f"<aimconstraint> {procedural_bone_name} {procedural_bone_parent_name} {active_aimat_procedural.aim_target.name}\n"
-        procedural_string += f"<aimvector> {aim_vector}\n"
-        procedural_string += f"<upvector> {up_vector}\n"
-        procedural_string += f"<basepos> {current_position.x} {current_position.y} {current_position.z}\n"
-
-        context.window_manager.clipboard = procedural_string
-
+        context.window_manager.clipboard = create_aimat_command(procedural_bone, active_aimat_procedural)
         return {"FINISHED"}
 
 
@@ -1386,12 +1388,11 @@ class CreateAllEnabledAimatProceduralCommandOperator(bpy.types.Operator):
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
-        active_aimat_procedural_index = source_procedural_bone_data.active_aimat_procedural
         aimat_procedurals = source_procedural_bone_data.aimat_procedurals
 
         all_procedural_strings = []
 
-        for (procedural_index, aimat_procedural) in enumerate(aimat_procedurals):
+        for aimat_procedural in aimat_procedurals:
             if not aimat_procedural.preview:
                 continue
 
@@ -1403,11 +1404,7 @@ class CreateAllEnabledAimatProceduralCommandOperator(bpy.types.Operator):
             if aim_target is None:
                 continue
 
-            source_procedural_bone_data.active_aimat_procedural = procedural_index
-            bpy.ops.source_procedural.aimat_create_command()
-            all_procedural_strings.append(context.window_manager.clipboard)
-
-        source_procedural_bone_data.active_aimat_procedural = active_aimat_procedural_index
+            all_procedural_strings.append(create_aimat_command(procedural_bone, aimat_procedural))
 
         if len(all_procedural_strings):
             context.window_manager.clipboard = "\n".join(all_procedural_strings)
@@ -1507,6 +1504,76 @@ class RemoveJiggleProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def create_jiggle_command(target_bone, active_jiggle_procedural):
+    procedural_string = f"$jigglebone \"{target_bone.name}\" {{\n"
+
+    if active_jiggle_procedural.tip_flex_type == "RIGID":
+        procedural_string += "\tis_rigid {\n"
+        procedural_string += f"\t\tlength {active_jiggle_procedural.length}\n"
+        procedural_string += f"\t\ttip_mass {active_jiggle_procedural.tip_mass}\n"
+
+    if active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
+        procedural_string += "\tis_flexible {\n"
+        procedural_string += f"\t\tlength {active_jiggle_procedural.length}\n"
+        procedural_string += f"\t\ttip_mass {active_jiggle_procedural.tip_mass}\n"
+        procedural_string += f"\t\tyaw_stiffness {active_jiggle_procedural.yaw_stiffness}\n"
+        procedural_string += f"\t\tyaw_damping {active_jiggle_procedural.yaw_damping}\n"
+        procedural_string += f"\t\tpitch_stiffness {active_jiggle_procedural.pitch_stiffness}\n"
+        procedural_string += f"\t\tpitch_damping {active_jiggle_procedural.pitch_damping}\n"
+
+        if active_jiggle_procedural.along_constraint == "NONE":
+            procedural_string += "\t\tallow_length_flex\n"
+            procedural_string += f"\t\talong_stiffness {active_jiggle_procedural.along_stiffness}\n"
+            procedural_string += f"\t\talong_damping {active_jiggle_procedural.along_damping}\n"
+
+    if active_jiggle_procedural.tip_flex_type == "RIGID" or active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
+        if active_jiggle_procedural.angle_constraint == "CONSTRAINT":
+            procedural_string += f"\t\tangle_constraint {degrees(active_jiggle_procedural.angle_limit)}\n"
+
+        if active_jiggle_procedural.yaw_constraint == "CONSTRAINT":
+            procedural_string += f"\t\tyaw_constraint {degrees(active_jiggle_procedural.yaw_minimum)} {degrees(active_jiggle_procedural.yaw_maximum)}\n"
+            if active_jiggle_procedural.use_friction:
+                procedural_string += f"\t\tyaw_friction {active_jiggle_procedural.yaw_friction}\n"
+                procedural_string += f"\t\tyaw_bounce {active_jiggle_procedural.yaw_bounce}\n"
+
+        if active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
+            procedural_string += f"\t\tpitch_constraint {degrees(active_jiggle_procedural.pitch_minimum)} {degrees(active_jiggle_procedural.pitch_maximum)}\n"
+            if active_jiggle_procedural.use_friction:
+                procedural_string += f"\t\tpitch_friction {active_jiggle_procedural.pitch_friction}\n"
+                procedural_string += f"\t\tpitch_bounce {active_jiggle_procedural.pitch_bounce}\n"
+
+        procedural_string += "\t}\n"
+
+    if active_jiggle_procedural.base_flex_type == "SPRING":
+        procedural_string += "\thas_base_spring {\n"
+
+        procedural_string += f"\t\tbase_mass {active_jiggle_procedural.base_mass}\n"
+        procedural_string += f"\t\tstiffness {active_jiggle_procedural.base_stiffness}\n"
+        procedural_string += f"\t\tdamping {active_jiggle_procedural.base_damping}\n"
+        procedural_string += f"\t\tleft_constraint {active_jiggle_procedural.base_minimum_left} {active_jiggle_procedural.base_maximum_left}\n"
+        procedural_string += f"\t\tleft_friction {active_jiggle_procedural.base_friction_left}\n"
+        procedural_string += f"\t\tup_constraint {active_jiggle_procedural.base_minimum_up} {active_jiggle_procedural.base_maximum_up}\n"
+        procedural_string += f"\t\tup_friction {active_jiggle_procedural.base_friction_up}\n"
+        procedural_string += f"\t\tforward_constraint {active_jiggle_procedural.base_minimum_forward} {active_jiggle_procedural.base_maximum_forward}\n"
+        procedural_string += f"\t\tforward_friction {active_jiggle_procedural.base_friction_forward}\n"
+
+        procedural_string += "\t}\n"
+
+    if active_jiggle_procedural.base_flex_type == "BOING":
+        procedural_string += "\tis_boing {\n"
+
+        procedural_string += f"\t\timpact_speed {active_jiggle_procedural.boing_impact_speed}\n"
+        procedural_string += f"\t\timpact_angle {degrees(active_jiggle_procedural.boing_impact_angle)}\n"
+        procedural_string += f"\t\tdamping_rate {active_jiggle_procedural.boing_damping_rate}\n"
+        procedural_string += f"\t\tfrequency {active_jiggle_procedural.boing_frequency}\n"
+        procedural_string += f"\t\tamplitude {active_jiggle_procedural.boing_amplitude}\n"
+
+        procedural_string += "\t}\n"
+
+    procedural_string += "}\n"
+    return procedural_string
+
+
 class CreateJiggleProceduralCommandOperator(bpy.types.Operator):
     bl_idname = "source_procedural.jiggle_create_command"
     bl_label = "Create Jiggle Procedural"
@@ -1516,76 +1583,7 @@ class CreateJiggleProceduralCommandOperator(bpy.types.Operator):
         source_procedural_bone_data = context.object.source_procedural_bone_data
         active_jiggle_procedural = source_procedural_bone_data.jiggle_procedurals[source_procedural_bone_data.active_jiggle_procedural]
         target_bone = context.object.pose.bones[active_jiggle_procedural.target_bone]
-
-        procedural_string = f"$jigglebone \"{target_bone.name}\" {{\n"
-
-        if active_jiggle_procedural.tip_flex_type == "RIGID":
-            procedural_string += "\tis_rigid {\n"
-            procedural_string += f"\t\tlength {active_jiggle_procedural.length}\n"
-            procedural_string += f"\t\ttip_mass {active_jiggle_procedural.tip_mass}\n"
-
-        if active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
-            procedural_string += "\tis_flexible {\n"
-            procedural_string += f"\t\tlength {active_jiggle_procedural.length}\n"
-            procedural_string += f"\t\ttip_mass {active_jiggle_procedural.tip_mass}\n"
-            procedural_string += f"\t\tyaw_stiffness {active_jiggle_procedural.yaw_stiffness}\n"
-            procedural_string += f"\t\tyaw_damping {active_jiggle_procedural.yaw_damping}\n"
-            procedural_string += f"\t\tpitch_stiffness {active_jiggle_procedural.pitch_stiffness}\n"
-            procedural_string += f"\t\tpitch_damping {active_jiggle_procedural.pitch_damping}\n"
-
-            if active_jiggle_procedural.along_constraint == "NONE":
-                procedural_string += "\t\tallow_length_flex\n"
-                procedural_string += f"\t\talong_stiffness {active_jiggle_procedural.along_stiffness}\n"
-                procedural_string += f"\t\talong_damping {active_jiggle_procedural.along_damping}\n"
-
-        if active_jiggle_procedural.tip_flex_type == "RIGID" or active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
-            if active_jiggle_procedural.angle_constraint == "CONSTRAINT":
-                procedural_string += f"\t\tangle_constraint {degrees(active_jiggle_procedural.angle_limit)}\n"
-
-            if active_jiggle_procedural.yaw_constraint == "CONSTRAINT":
-                procedural_string += f"\t\tyaw_constraint {degrees(active_jiggle_procedural.yaw_minimum)} {degrees(active_jiggle_procedural.yaw_maximum)}\n"
-                if active_jiggle_procedural.use_friction:
-                    procedural_string += f"\t\tyaw_friction {active_jiggle_procedural.yaw_friction}\n"
-                    procedural_string += f"\t\tyaw_bounce {active_jiggle_procedural.yaw_bounce}\n"
-
-            if active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
-                procedural_string += f"\t\tpitch_constraint {degrees(active_jiggle_procedural.pitch_minimum)} {degrees(active_jiggle_procedural.pitch_maximum)}\n"
-                if active_jiggle_procedural.use_friction:
-                    procedural_string += f"\t\tpitch_friction {active_jiggle_procedural.pitch_friction}\n"
-                    procedural_string += f"\t\tpitch_bounce {active_jiggle_procedural.pitch_bounce}\n"
-
-            procedural_string += "\t}\n"
-
-        if active_jiggle_procedural.base_flex_type == "SPRING":
-            procedural_string += "\thas_base_spring {\n"
-
-            procedural_string += f"\t\tbase_mass {active_jiggle_procedural.base_mass}\n"
-            procedural_string += f"\t\tstiffness {active_jiggle_procedural.base_stiffness}\n"
-            procedural_string += f"\t\tdamping {active_jiggle_procedural.base_damping}\n"
-            procedural_string += f"\t\tleft_constraint {active_jiggle_procedural.base_minimum_left} {active_jiggle_procedural.base_maximum_left}\n"
-            procedural_string += f"\t\tleft_friction {active_jiggle_procedural.base_friction_left}\n"
-            procedural_string += f"\t\tup_constraint {active_jiggle_procedural.base_minimum_up} {active_jiggle_procedural.base_maximum_up}\n"
-            procedural_string += f"\t\tup_friction {active_jiggle_procedural.base_friction_up}\n"
-            procedural_string += f"\t\tforward_constraint {active_jiggle_procedural.base_minimum_forward} {active_jiggle_procedural.base_maximum_forward}\n"
-            procedural_string += f"\t\tforward_friction {active_jiggle_procedural.base_friction_forward}\n"
-
-            procedural_string += "\t}\n"
-
-        if active_jiggle_procedural.base_flex_type == "BOING":
-            procedural_string += "\tis_boing {\n"
-
-            procedural_string += f"\t\timpact_speed {active_jiggle_procedural.boing_impact_speed}\n"
-            procedural_string += f"\t\timpact_angle {degrees(active_jiggle_procedural.boing_impact_angle)}\n"
-            procedural_string += f"\t\tdamping_rate {active_jiggle_procedural.boing_damping_rate}\n"
-            procedural_string += f"\t\tfrequency {active_jiggle_procedural.boing_frequency}\n"
-            procedural_string += f"\t\tamplitude {active_jiggle_procedural.boing_amplitude}\n"
-
-            procedural_string += "\t}\n"
-
-        procedural_string += "}\n"
-
-        context.window_manager.clipboard = procedural_string
-
+        context.window_manager.clipboard = create_jiggle_command(target_bone, active_jiggle_procedural)
         return {"FINISHED"}
 
 
@@ -1602,12 +1600,11 @@ class CreateAllEnabledJiggleProceduralCommandOperator(bpy.types.Operator):
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
-        active_jiggle_procedural_index = source_procedural_bone_data.active_jiggle_procedural
         jiggle_procedurals = source_procedural_bone_data.jiggle_procedurals
 
         all_procedural_strings = []
 
-        for (procedural_index, jiggle_procedural) in enumerate(jiggle_procedurals):
+        for jiggle_procedural in jiggle_procedurals:
             if not jiggle_procedural.preview:
                 continue
 
@@ -1615,11 +1612,7 @@ class CreateAllEnabledJiggleProceduralCommandOperator(bpy.types.Operator):
             if target_bone is None:
                 continue
 
-            source_procedural_bone_data.active_jiggle_procedural = procedural_index
-            bpy.ops.source_procedural.jiggle_create_command()
-            all_procedural_strings.append(context.window_manager.clipboard)
-
-        source_procedural_bone_data.active_jiggle_procedural = active_jiggle_procedural_index
+            all_procedural_strings.append(create_jiggle_command(target_bone, jiggle_procedural))
 
         if len(all_procedural_strings):
             context.window_manager.clipboard = "\n".join(all_procedural_strings)
@@ -1734,6 +1727,7 @@ class RemoveAllJiggleProceduralOperator(bpy.types.Operator):
         source_procedural_bone_data.jiggle_procedurals.clear()
         return {"FINISHED"}
 
+
 class MoveUpJiggleProceduralOperator(bpy.types.Operator):
     bl_idname = "source_procedural.jiggle_move_up"
     bl_label = "Move Up Jiggle Procedural"
@@ -1747,7 +1741,8 @@ class MoveUpJiggleProceduralOperator(bpy.types.Operator):
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
 
-        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural, source_procedural_bone_data.active_jiggle_procedural - 1)
+        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural,
+                                                            source_procedural_bone_data.active_jiggle_procedural - 1)
         source_procedural_bone_data.active_jiggle_procedural -= 1
 
         return {"FINISHED"}
@@ -1766,7 +1761,8 @@ class MoveDownJiggleProceduralOperator(bpy.types.Operator):
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
 
-        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural, source_procedural_bone_data.active_jiggle_procedural + 1)
+        source_procedural_bone_data.jiggle_procedurals.move(source_procedural_bone_data.active_jiggle_procedural,
+                                                            source_procedural_bone_data.active_jiggle_procedural + 1)
         source_procedural_bone_data.active_jiggle_procedural += 1
 
         return {"FINISHED"}
@@ -2232,6 +2228,7 @@ class JiggleProceduralPanel(bpy.types.Panel):
 
 debug_shader = gpu.shader.from_builtin('UNIFORM_COLOR' if bpy.app.version >= (3, 4) else '3D_UNIFORM_COLOR')
 
+
 def create_cone(start, left, up, forward, length, angle):
     radius = tan(angle) * length
     center = start + forward * length
@@ -2248,6 +2245,7 @@ def create_cone(start, left, up, forward, length, angle):
         indices.append([0, next_i, i])
     return (vertices, indices)
 
+
 def create_wall(start, up, forward, length, width, angle):
     rotation = Matrix.Rotation(angle, 3, up)
     return [
@@ -2258,6 +2256,7 @@ def create_wall(start, up, forward, length, width, angle):
         start + (rotation @ (-up * length + forward * width)),
         start + (rotation @ (up * length + forward * width))
     ]
+
 
 def debug_draw():
     context = bpy.context
@@ -2326,7 +2325,9 @@ def debug_draw():
             batch = batch_for_shader(debug_shader, 'TRIS', {"pos": maximum_wall})
             batch.draw(debug_shader)
 
+
 draw_handler = None
+
 
 def register():
     # Properties
