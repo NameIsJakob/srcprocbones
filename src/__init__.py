@@ -663,7 +663,8 @@ def copy_quaternion_procedural_trigger(source, destination):
 
 
 class QuaternionProceduralProperty(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(default="New Quaternion Procedural", name="Name", description="The name of the quaternion procedural")
+    name: bpy.props.StringProperty(default="New Quaternion Procedural", name="Name", description="The name of the quaternion procedural",
+                                   update=lambda self, context: enforce_unique_name(self, context.object.source_procedural_bone_data.quaternion_procedurals))
     target_bone: bpy.props.StringProperty(name="Target Bone", description="The bone that will be procedurally animated")
     control_bone: bpy.props.StringProperty(name="Control Bone", description="The bone that will drive the target bone")
     override_position: bpy.props.BoolProperty(default=False, description="Allows to override the position of the target bone")
@@ -686,7 +687,8 @@ def copy_quaternion_procedural(source, destination):
 
 
 class AimatProceduralProperty(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(default="New Aimat Procedural", name="Name", description="The name of the aimat procedural")
+    name: bpy.props.StringProperty(default="New Aimat Procedural", name="Name", description="The name of the aimat procedural",
+                                   update=lambda self, context: enforce_unique_name(self, context.object.source_procedural_bone_data.aimat_procedurals))
     procedural_bone: bpy.props.StringProperty(name="Procedural Bone", description="The bone that will be procedurally animated")
     aim_target: bpy.props.PointerProperty(name="Aim Target", description="The attachment the procedural bone will target",
                                           type=bpy.types.Object, poll=lambda self, object: object.type == 'EMPTY')
@@ -710,18 +712,17 @@ def enforce_unique_name(current_entry, entries):
     if current_entry.name not in taken_names:
         return
 
-    count = 0
-    base, dot, suffix = current_entry.name.rpartition(".")
-    if dot and suffix.isdecimal():
-        count = int(suffix)
-    else:
-        base = current_entry.name
+    number = 0
+    prefix, separator, suffix = current_entry.name.rpartition(".")
+    base = prefix if separator else suffix
+    if separator and suffix.isdigit():
+        number = int(suffix)
 
     while True:
-        count += 1
-        candidate = f"{base}.{count:03d}"
-        if candidate not in taken_names:
-            current_entry.name = candidate
+        number += 1
+        new_name = f"{base}.{number:03d}"
+        if new_name not in taken_names:
+            current_entry.name = new_name
             return
 
 
@@ -877,9 +878,11 @@ class AddQuaternionProceduralOperator(bpy.types.Operator):
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
+        quaternion_procedurals = source_procedural_bone_data.quaternion_procedurals
 
-        source_procedural_bone_data.quaternion_procedurals.add()
-        source_procedural_bone_data.active_quaternion_procedural = len(source_procedural_bone_data.quaternion_procedurals) - 1
+        quaternion_procedurals.add()
+        source_procedural_bone_data.active_quaternion_procedural = len(quaternion_procedurals) - 1
+        enforce_unique_name(quaternion_procedurals[source_procedural_bone_data.active_quaternion_procedural], quaternion_procedurals)
 
         return {"FINISHED"}
 
@@ -1326,9 +1329,11 @@ class AddAimatProceduralOperator(bpy.types.Operator):
 
     def execute(self, context):
         source_procedural_bone_data = context.object.source_procedural_bone_data
+        aimat_procedurals = source_procedural_bone_data.aimat_procedurals
 
-        source_procedural_bone_data.aimat_procedurals.add()
-        source_procedural_bone_data.active_aimat_procedural = len(source_procedural_bone_data.aimat_procedurals) - 1
+        aimat_procedurals.add()
+        source_procedural_bone_data.active_aimat_procedural = len(aimat_procedurals) - 1
+        enforce_unique_name(aimat_procedurals[source_procedural_bone_data.active_aimat_procedural], aimat_procedurals)
 
         return {"FINISHED"}
 
@@ -1486,7 +1491,7 @@ class AddJiggleProceduralOperator(bpy.types.Operator):
         jiggle_procedurals.add()
         source_procedural_bone_data.active_jiggle_procedural = len(jiggle_procedurals) - 1
         enforce_unique_name(jiggle_procedurals[source_procedural_bone_data.active_jiggle_procedural], jiggle_procedurals)
-    
+
         return {"FINISHED"}
 
 
