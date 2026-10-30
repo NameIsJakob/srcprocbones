@@ -179,23 +179,23 @@ class JiggleState:
         self.boing_time: 0.0
 
 
-def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state, current_time):
-    target_bone = previewer.pose.bones.get(active_jiggle_procedural.target_bone)
+def simulate_jiggle_procedural(previewer, jiggle_procedural, jiggle_state, current_time):
+    target_bone = previewer.pose.bones.get(jiggle_procedural.target_bone)
     if target_bone is None:
         return
 
-    jiggle_bone_data_space_name = active_jiggle_procedural.target_bone + " Jiggle Bone Data Space"
+    jiggle_bone_data_space_name = jiggle_procedural.target_bone + " Jiggle Bone Data Space"
     jiggle_bone_data_space = bpy.data.objects.get(jiggle_bone_data_space_name)
     if not jiggle_bone_data_space:
         jiggle_bone_data_space = bpy.data.objects.new(jiggle_bone_data_space_name, None)
 
-    jiggle_bone_data_name = active_jiggle_procedural.target_bone + " Jiggle Bone Data"
+    jiggle_bone_data_name = jiggle_procedural.target_bone + " Jiggle Bone Data"
     jiggle_bone_data = bpy.data.objects.get(jiggle_bone_data_name)
     if not jiggle_bone_data:
         jiggle_bone_data = bpy.data.objects.new(jiggle_bone_data_name, None)
         jiggle_bone_data.parent = jiggle_bone_data_space
 
-    location_constraint_name = active_jiggle_procedural.target_bone + " Jiggle Bone Location"
+    location_constraint_name = jiggle_procedural.target_bone + " Jiggle Bone Location"
     location_constraint = target_bone.constraints.get(location_constraint_name)
     if not location_constraint:
         location_constraint = target_bone.constraints.new("COPY_LOCATION")
@@ -206,7 +206,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         location_constraint.target_space = "LOCAL"
         location_constraint.owner_space = "LOCAL"
 
-    rotation_constraint_name = active_jiggle_procedural.target_bone + " Jiggle Bone Rotation"
+    rotation_constraint_name = jiggle_procedural.target_bone + " Jiggle Bone Rotation"
     rotation_constraint = target_bone.constraints.get(rotation_constraint_name)
     if not rotation_constraint:
         rotation_constraint = target_bone.constraints.new("COPY_ROTATION")
@@ -221,7 +221,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         rotation_constraint.target_space = "LOCAL"
         rotation_constraint.owner_space = "LOCAL"
 
-    scale_constraint_name = active_jiggle_procedural.target_bone + " Jiggle Bone Scale"
+    scale_constraint_name = jiggle_procedural.target_bone + " Jiggle Bone Scale"
     scale_constraint = target_bone.constraints.get(scale_constraint_name)
     if not scale_constraint:
         scale_constraint = target_bone.constraints.new("COPY_SCALE")
@@ -258,7 +258,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
     goal_up = goal_matrix.col[1].to_3d()
     goal_forward = goal_matrix.col[2].to_3d()
 
-    goal_tip = goal_base_position + active_jiggle_procedural.length * goal_forward
+    goal_tip = goal_base_position + jiggle_procedural.length * goal_forward
 
     time_tolerance = 0.5
     if current_time - jiggle_state.last_update > time_tolerance:
@@ -284,10 +284,10 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         delta_time = current_time - jiggle_state.last_update
     jiggle_state.last_update = current_time
 
-    if active_jiggle_procedural.tip_flex_type == "RIGID" or active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
-        jiggle_state.tip_acceleration.z -= active_jiggle_procedural.tip_mass
+    if jiggle_procedural.tip_flex_type == "RIGID" or jiggle_procedural.tip_flex_type == "FLEXIBLE":
+        jiggle_state.tip_acceleration.z -= jiggle_procedural.tip_mass
 
-        if active_jiggle_procedural.tip_flex_type == "FLEXIBLE":
+        if jiggle_procedural.tip_flex_type == "FLEXIBLE":
             error = goal_tip - jiggle_state.tip_position
 
             local_error = Vector()
@@ -299,16 +299,16 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
             local_velocity.x = goal_left.dot(jiggle_state.tip_velocity)
             local_velocity.y = goal_up.dot(jiggle_state.tip_velocity)
 
-            yaw_acceleration = active_jiggle_procedural.yaw_stiffness * local_error.x - active_jiggle_procedural.yaw_damping * local_velocity.x
+            yaw_acceleration = jiggle_procedural.yaw_stiffness * local_error.x - jiggle_procedural.yaw_damping * local_velocity.x
 
-            pitch_acceleration = active_jiggle_procedural.pitch_stiffness * local_error.y - active_jiggle_procedural.pitch_damping * local_velocity.y
+            pitch_acceleration = jiggle_procedural.pitch_stiffness * local_error.y - jiggle_procedural.pitch_damping * local_velocity.y
 
-            if active_jiggle_procedural.along_constraint == "CONSTRAINT":
+            if jiggle_procedural.along_constraint == "CONSTRAINT":
                 jiggle_state.tip_acceleration = jiggle_state.tip_acceleration + yaw_acceleration * goal_left + pitch_acceleration * goal_up
             else:
                 local_velocity.z = goal_forward.dot(jiggle_state.tip_velocity)
 
-                along_acceleration = active_jiggle_procedural.along_stiffness * local_error.z - active_jiggle_procedural.along_damping * local_velocity.z
+                along_acceleration = jiggle_procedural.along_stiffness * local_error.z - jiggle_procedural.along_damping * local_velocity.z
 
                 jiggle_state.tip_acceleration = jiggle_state.tip_acceleration + yaw_acceleration * \
                     goal_left + pitch_acceleration * goal_up + along_acceleration * goal_forward
@@ -318,7 +318,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
 
         jiggle_state.tip_acceleration = Vector()
 
-        if active_jiggle_procedural.yaw_constraint == "CONSTRAINT" or active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
+        if jiggle_procedural.yaw_constraint == "CONSTRAINT" or jiggle_procedural.pitch_constraint == "CONSTRAINT":
             along = jiggle_state.tip_position - goal_base_position
             local_along = Vector()
             local_along.x = goal_left.dot(along)
@@ -330,18 +330,18 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
             local_velocity.y = goal_up.dot(jiggle_state.tip_velocity)
             local_velocity.z = goal_forward.dot(jiggle_state.tip_velocity)
 
-            if active_jiggle_procedural.yaw_constraint == "CONSTRAINT":
+            if jiggle_procedural.yaw_constraint == "CONSTRAINT":
                 yaw_error = atan2(local_along.x, local_along.z)
 
                 is_at_limit = False
                 yaw = 0.0
 
-                if yaw_error < active_jiggle_procedural.yaw_minimum:
+                if yaw_error < jiggle_procedural.yaw_minimum:
                     is_at_limit = True
-                    yaw = active_jiggle_procedural.yaw_minimum
-                elif yaw_error > active_jiggle_procedural.yaw_maximum:
+                    yaw = jiggle_procedural.yaw_minimum
+                elif yaw_error > jiggle_procedural.yaw_maximum:
                     is_at_limit = True
-                    yaw = active_jiggle_procedural.yaw_maximum
+                    yaw = jiggle_procedural.yaw_maximum
 
                 if is_at_limit:
                     sin_yaw = sin(yaw)
@@ -361,9 +361,9 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
                     jiggle_state.tip_position = goal_base_position + limit_along.y * limit_up + limit_along.z * limit_forward
 
                     limit_velocity = Vector((0.0, limit_up.dot(jiggle_state.tip_velocity), limit_forward.dot(jiggle_state.tip_velocity)))
-                    jiggle_state.tip_acceleration = jiggle_state.tip_acceleration - active_jiggle_procedural.yaw_friction * \
+                    jiggle_state.tip_acceleration = jiggle_state.tip_acceleration - jiggle_procedural.yaw_friction * \
                         (limit_velocity.y * limit_up + limit_velocity.z * limit_forward)
-                    jiggle_state.tip_velocity = -active_jiggle_procedural.yaw_bounce * \
+                    jiggle_state.tip_velocity = -jiggle_procedural.yaw_bounce * \
                         limit_velocity.x * limit_left + limit_velocity.y * limit_up + limit_velocity.z * limit_forward
 
                     along = jiggle_state.tip_position - goal_base_position
@@ -371,18 +371,18 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
                     local_velocity = Vector((goal_left.dot(jiggle_state.tip_velocity), goal_up.dot(
                         jiggle_state.tip_velocity), goal_forward.dot(jiggle_state.tip_velocity)))
 
-            if active_jiggle_procedural.pitch_constraint == "CONSTRAINT":
+            if jiggle_procedural.pitch_constraint == "CONSTRAINT":
                 pitch_error = atan2(local_along.y, local_along.z)
 
                 is_at_limit = False
                 pitch = 0.0
 
-                if pitch_error < active_jiggle_procedural.pitch_minimum:
+                if pitch_error < jiggle_procedural.pitch_minimum:
                     is_at_limit = True
-                    pitch = active_jiggle_procedural.pitch_minimum
-                elif pitch_error > active_jiggle_procedural.pitch_maximum:
+                    pitch = jiggle_procedural.pitch_minimum
+                elif pitch_error > jiggle_procedural.pitch_maximum:
                     is_at_limit = True
-                    pitch = active_jiggle_procedural.pitch_maximum
+                    pitch = jiggle_procedural.pitch_maximum
 
                 if is_at_limit:
                     sin_pitch = sin(pitch)
@@ -402,14 +402,14 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
                     jiggle_state.tip_position = goal_base_position + limit_along.x * limit_left + limit_along.z * limit_forward
 
                     limit_velocity = Vector((0.0, limit_up.dot(jiggle_state.tip_velocity), limit_forward.dot(jiggle_state.tip_velocity)))
-                    jiggle_state.tip_acceleration = jiggle_state.tip_acceleration - active_jiggle_procedural.pitch_friction * \
+                    jiggle_state.tip_acceleration = jiggle_state.tip_acceleration - jiggle_procedural.pitch_friction * \
                         (limit_velocity.x * limit_left + limit_velocity.z * limit_forward)
                     jiggle_state.tip_velocity = limit_velocity.x * limit_left - \
-                        active_jiggle_procedural.pitch_bounce * limit_velocity.y * limit_up + limit_velocity.z * limit_forward
+                        jiggle_procedural.pitch_bounce * limit_velocity.y * limit_up + limit_velocity.z * limit_forward
 
         forward = (jiggle_state.tip_position - goal_base_position).normalized()
 
-        if active_jiggle_procedural.angle_constraint == "CONSTRAINT":
+        if jiggle_procedural.angle_constraint == "CONSTRAINT":
             dot = forward.dot(goal_forward)
 
             if dot > -1.0 and dot < 1.0:
@@ -417,14 +417,14 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
                 if dot < 0.0:
                     angle_between = 2.0 * pi - angle_between
 
-                if angle_between > active_jiggle_procedural.angle_limit:
-                    max_between = active_jiggle_procedural.length * sin(active_jiggle_procedural.angle_limit)
+                if angle_between > jiggle_procedural.angle_limit:
+                    max_between = jiggle_procedural.length * sin(jiggle_procedural.angle_limit)
                     delta = (goal_tip - jiggle_state.tip_position).normalized()
                     jiggle_state.tip_position = goal_tip - max_between * delta
                     forward = (jiggle_state.tip_position - goal_base_position).normalized()
 
-        if active_jiggle_procedural.along_constraint == "CONSTRAINT":
-            jiggle_state.tip_position = goal_base_position + active_jiggle_procedural.length * forward
+        if jiggle_procedural.along_constraint == "CONSTRAINT":
+            jiggle_state.tip_position = goal_base_position + jiggle_procedural.length * forward
             jiggle_state.tip_velocity = jiggle_state.tip_velocity - jiggle_state.tip_velocity.dot(forward) * forward
 
         left = goal_up.cross(forward).normalized()
@@ -444,12 +444,12 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         bone_matrix[1][3] = goal_base_position.y
         bone_matrix[2][3] = goal_base_position.z
 
-    if active_jiggle_procedural.base_flex_type == "SPRING":
-        jiggle_state.base_acceleration[2] -= active_jiggle_procedural.base_mass
+    if jiggle_procedural.base_flex_type == "SPRING":
+        jiggle_state.base_acceleration[2] -= jiggle_procedural.base_mass
 
         error = goal_base_position - jiggle_state.base_position
-        jiggle_state.base_acceleration = jiggle_state.base_acceleration + active_jiggle_procedural.base_stiffness * error - \
-            active_jiggle_procedural.base_damping * jiggle_state.base_velocity
+        jiggle_state.base_acceleration = jiggle_state.base_acceleration + jiggle_procedural.base_stiffness * error - \
+            jiggle_procedural.base_damping * jiggle_state.base_velocity
 
         jiggle_state.base_velocity = jiggle_state.base_velocity + jiggle_state.base_acceleration * delta_time
         jiggle_state.base_position = jiggle_state.base_position + jiggle_state.base_velocity * delta_time
@@ -467,31 +467,31 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         local_velocity.y = goal_up.dot(jiggle_state.base_velocity)
         local_velocity.z = goal_forward.dot(jiggle_state.base_velocity)
 
-        if local_error.x < active_jiggle_procedural.base_minimum_left:
-            local_error.x = active_jiggle_procedural.base_minimum_left
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_left * \
+        if local_error.x < jiggle_procedural.base_minimum_left:
+            local_error.x = jiggle_procedural.base_minimum_left
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_left * \
                 (local_velocity.y * goal_up + local_velocity.z * goal_forward)
-        elif local_error.x > active_jiggle_procedural.base_maximum_left:
-            local_error.x = active_jiggle_procedural.base_maximum_left
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_left * \
+        elif local_error.x > jiggle_procedural.base_maximum_left:
+            local_error.x = jiggle_procedural.base_maximum_left
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_left * \
                 (local_velocity.y * goal_up + local_velocity.z * goal_forward)
 
-        if local_error.y < active_jiggle_procedural.base_minimum_up:
-            local_error.y = active_jiggle_procedural.base_minimum_up
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_up * \
+        if local_error.y < jiggle_procedural.base_minimum_up:
+            local_error.y = jiggle_procedural.base_minimum_up
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_up * \
                 (local_velocity.x * goal_left + local_velocity.z * goal_forward)
-        elif local_error.y > active_jiggle_procedural.base_maximum_up:
-            local_error.y = active_jiggle_procedural.base_maximum_up
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_up * \
+        elif local_error.y > jiggle_procedural.base_maximum_up:
+            local_error.y = jiggle_procedural.base_maximum_up
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_up * \
                 (local_velocity.x * goal_left + local_velocity.z * goal_forward)
 
-        if local_error.z < active_jiggle_procedural.base_minimum_forward:
-            local_error.z = active_jiggle_procedural.base_minimum_forward
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_forward * \
+        if local_error.z < jiggle_procedural.base_minimum_forward:
+            local_error.z = jiggle_procedural.base_minimum_forward
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_forward * \
                 (local_velocity.x * goal_left + local_velocity.y * goal_up)
-        elif local_error.z > active_jiggle_procedural.base_maximum_forward:
-            local_error.z = active_jiggle_procedural.base_maximum_forward
-            active_jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - active_jiggle_procedural.base_friction_forward * \
+        elif local_error.z > jiggle_procedural.base_maximum_forward:
+            local_error.z = jiggle_procedural.base_maximum_forward
+            jiggle_procedural.base_acceleration = jiggle_state.base_acceleration - jiggle_procedural.base_friction_forward * \
                 (local_velocity.x * goal_left + local_velocity.y * goal_up)
 
         jiggle_state.base_position = goal_base_position + local_error.x * goal_left + local_error.y * goal_up + local_error.z * goal_forward
@@ -503,7 +503,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         bone_matrix[1][3] = jiggle_state.base_position.y
         bone_matrix[2][3] = jiggle_state.base_position.z
 
-    if active_jiggle_procedural.base_flex_type == "BOING":
+    if jiggle_procedural.base_flex_type == "BOING":
         velocity = (goal_base_position - jiggle_state.last_boing_position).normalized()
         speed = (goal_base_position - jiggle_state.last_boing_position).length
         jiggle_state.last_boing_position = goal_base_position
@@ -520,14 +520,14 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
         minimum_reboing_time = 0.5
 
         if (speed > minimum_speed or jiggle_state.boing_speed > minimum_speed) and jiggle_state.boing_time > minimum_reboing_time:
-            if abs(jiggle_state.boing_speed - speed) > active_jiggle_procedural.boing_impact_speed or velocity.dot(jiggle_state.boing_velocity_direction) < cos(active_jiggle_procedural.boing_impact_angle):
+            if abs(jiggle_state.boing_speed - speed) > jiggle_procedural.boing_impact_speed or velocity.dot(jiggle_state.boing_velocity_direction) < cos(jiggle_procedural.boing_impact_angle):
                 jiggle_state.boing_time = 0.0
                 jiggle_state.boing_direction = -velocity
 
         jiggle_state.boing_velocity_direction = velocity
         jiggle_state.boing_speed = speed
 
-        damping = 1.0 - (active_jiggle_procedural.boing_damping_rate * jiggle_state.boing_time)
+        damping = 1.0 - (jiggle_procedural.boing_damping_rate * jiggle_state.boing_time)
 
         if damping < 0.01:
             bone_matrix = goal_matrix.copy()
@@ -538,7 +538,7 @@ def simulate_jiggle_procedural(previewer, active_jiggle_procedural, jiggle_state
             damping *= damping
             damping *= damping
 
-            flex = active_jiggle_procedural.boing_amplitude * cos(active_jiggle_procedural.boing_frequency * jiggle_state.boing_time) * damping
+            flex = jiggle_procedural.boing_amplitude * cos(jiggle_procedural.boing_frequency * jiggle_state.boing_time) * damping
 
             squash = 1.0 + flex
             stretch = 1.0 - flex
