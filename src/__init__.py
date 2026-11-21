@@ -1064,6 +1064,46 @@ class RemoveAllQuaternionProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MoveUpQuaternionProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.quaternion_move_up"
+    bl_label = "Move Up Quaternion Procedural"
+    bl_description = "Moves the selected quaternion up"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_quaternion_procedural > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.quaternion_procedurals.move(source_procedural_bone_data.active_quaternion_procedural,
+                                                            source_procedural_bone_data.active_quaternion_procedural - 1)
+        source_procedural_bone_data.active_quaternion_procedural -= 1
+
+        return {"FINISHED"}
+
+
+class MoveDownQuaternionProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.quaternion_move_down"
+    bl_label = "Move Down Quaternion Procedural"
+    bl_description = "Moves the selected quaternion down"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_quaternion_procedural < len(source_procedural_bone_data.quaternion_procedurals) - 1
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.quaternion_procedurals.move(source_procedural_bone_data.active_quaternion_procedural,
+                                                            source_procedural_bone_data.active_quaternion_procedural + 1)
+        source_procedural_bone_data.active_quaternion_procedural += 1
+
+        return {"FINISHED"}
+
+
 # endregion
 
 # region Quaternion Procedural Trigger Operators
@@ -1476,6 +1516,45 @@ class RemoveAllAimatProceduralOperator(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MoveUpAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_move_up"
+    bl_label = "Move Up Aimat Procedural"
+    bl_description = "Moves the selected aimat up"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_aimat_procedural > 0
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.aimat_procedurals.move(source_procedural_bone_data.active_aimat_procedural,
+                                                            source_procedural_bone_data.active_aimat_procedural - 1)
+        source_procedural_bone_data.active_aimat_procedural -= 1
+
+        return {"FINISHED"}
+
+
+class MoveDownAimatProceduralOperator(bpy.types.Operator):
+    bl_idname = "source_procedural.aimat_move_down"
+    bl_label = "Move Down Qimat Procedural"
+    bl_description = "Moves the selected aimat down"
+
+    @classmethod
+    def poll(cls, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+        return source_procedural_bone_data.active_aimat_procedural < len(source_procedural_bone_data.aimat_procedurals) - 1
+
+    def execute(self, context):
+        source_procedural_bone_data = context.object.source_procedural_bone_data
+
+        source_procedural_bone_data.aimat_procedurals.move(source_procedural_bone_data.active_aimat_procedural,
+                                                            source_procedural_bone_data.active_aimat_procedural + 1)
+        source_procedural_bone_data.active_aimat_procedural += 1
+
+        return {"FINISHED"}
+
 # endregion
 
 # region Jiggle Procedural Operators
@@ -1883,6 +1962,9 @@ class QuaternionProceduralPanel(bpy.types.Panel):
         col.operator(RemoveQuaternionProceduralOperator.bl_idname, text="", icon="REMOVE")
         col.separator()
         col.menu(QuaternionProceduralContextMenu.bl_idname, text="", icon="DOWNARROW_HLT")
+        col.separator()
+        col.operator(MoveUpQuaternionProceduralOperator.bl_idname, text="", icon="TRIA_UP")
+        col.operator(MoveDownQuaternionProceduralOperator.bl_idname, text="", icon="TRIA_DOWN")
 
         if len(source_procedural_bone_data.quaternion_procedurals) == 0:
             return
@@ -2033,6 +2115,9 @@ class AimatProceduralPanel(bpy.types.Panel):
         col.operator(RemoveAimatProceduralOperator.bl_idname, text="", icon="REMOVE")
         col.separator()
         col.menu(AimatProceduralContextMenu.bl_idname, text="", icon="DOWNARROW_HLT")
+        col.separator()
+        col.operator(MoveUpAimatProceduralOperator.bl_idname, text="", icon="TRIA_UP")
+        col.operator(MoveDownAimatProceduralOperator.bl_idname, text="", icon="TRIA_DOWN")
 
         if len(source_procedural_bone_data.aimat_procedurals) == 0:
             return
@@ -2357,6 +2442,8 @@ def register():
     bpy.utils.register_class(CopyQuaternionProceduralOperator)
     bpy.utils.register_class(PasteQuaternionProceduralOperator)
     bpy.utils.register_class(RemoveAllQuaternionProceduralOperator)
+    bpy.utils.register_class(MoveUpQuaternionProceduralOperator)
+    bpy.utils.register_class(MoveDownQuaternionProceduralOperator)
 
     # Quaternion Procedural Trigger Operators
     bpy.utils.register_class(AddQuaternionProceduralTriggerOperator)
@@ -2379,6 +2466,8 @@ def register():
     bpy.utils.register_class(CopyAimatProceduralOperator)
     bpy.utils.register_class(PasteAimatProceduralOperator)
     bpy.utils.register_class(RemoveAllAimatProceduralOperator)
+    bpy.utils.register_class(MoveUpAimatProceduralOperator)
+    bpy.utils.register_class(MoveDownAimatProceduralOperator)
 
     # Jiggle Procedural Operators
     bpy.utils.register_class(AddJiggleProceduralOperator)
@@ -2433,6 +2522,8 @@ def unregister():
     bpy.utils.unregister_class(CopyQuaternionProceduralOperator)
     bpy.utils.unregister_class(PasteQuaternionProceduralOperator)
     bpy.utils.unregister_class(RemoveAllQuaternionProceduralOperator)
+    bpy.utils.unregister_class(MoveUpQuaternionProceduralOperator)
+    bpy.utils.unregister_class(MoveDownQuaternionProceduralOperator)
 
     # Quaternion Procedural Trigger Operators
     bpy.utils.unregister_class(AddQuaternionProceduralTriggerOperator)
@@ -2455,6 +2546,8 @@ def unregister():
     bpy.utils.unregister_class(CopyAimatProceduralOperator)
     bpy.utils.unregister_class(PasteAimatProceduralOperator)
     bpy.utils.unregister_class(RemoveAllAimatProceduralOperator)
+    bpy.utils.unregister_class(MoveUpAimatProceduralOperator)
+    bpy.utils.unregister_class(MoveDownAimatProceduralOperator)
 
     # Jiggle Procedural Operators
     bpy.utils.unregister_class(AddJiggleProceduralOperator)
